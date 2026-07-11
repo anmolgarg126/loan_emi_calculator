@@ -112,7 +112,7 @@ Costs remain separate:
 - Homeowner expenses over the original contracted loan tenure, excluded from OD savings because they continue after loan payoff.
 - Total modelled cash outflow.
 
-The page includes one cost-composition chart, one balance timeline, and an expandable yearly-to-monthly amortization table. Each chart has a textual/table alternative.
+The page includes one native-SVG cost-composition chart, one native-SVG balance timeline, and an expandable yearly-to-monthly amortization table. Each chart has a textual/table alternative.
 
 ## Persistence and privacy
 

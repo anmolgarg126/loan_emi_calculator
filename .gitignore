@@ -3,8 +3,7 @@ node_modules/
 .pnp/
 .pnp.*
 
-# Next.js and build output
-.next/
+# Build and test output
 out/
 dist/
 build/
@@ -39,7 +38,3 @@ pnpm-debug.log*
 .eslintcache
 .turbo/
 .cache/
-
-# Local deployment metadata
-.vercel/
-
