@@ -77,4 +77,6 @@ The repository name is fixed as `loan_emi_calculator`; the owner is dynamic. Git
 
 Runtime share URLs use `window.location.origin` plus `import.meta.env.BASE_URL`. After an owner/username change, manually rerun the deployment workflow; no source edit is required.
 
+For a new repository, create the remote without pushing, enable Pages with `gh api --method POST repos/{owner}/{repo}/pages -f build_type=workflow`, and then push `main`. This avoids the first workflow run failing because Pages has not been enabled yet.
+
 Do not create or push the public repository until the user has confirmed the licensing choice in `plan.md`.

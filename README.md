@@ -34,7 +34,19 @@ Pushes to `main` are verified and deployed through GitHub Actions. The live URL 
 
 `https://<current-repository-owner>.github.io/loan_emi_calculator/`
 
-The repository owner comes from the GitHub Actions context. After a username change, manually rerun the deployment workflow.
+Before the first public release, choose either an MIT license or no license/all rights reserved. Then authenticate GitHub CLI as the intended owner and run:
+
+```sh
+gh repo create loan_emi_calculator --public --source=. --remote=origin
+gh api --method POST repos/{owner}/{repo}/pages -f build_type=workflow
+git push -u origin main
+```
+
+The second command enables GitHub Actions as the Pages source before the first push. The workflow then verifies and deploys the app over HTTPS.
+
+The repository owner comes from the GitHub Actions context; it is not stored in source. After a GitHub username or ownership change, run `gh workflow run deploy.yml`, wait for it to pass, and verify the newly derived URL. No source edit is required.
+
+To roll back a faulty release, revert the faulty commit on `main`, push the revert, and verify the Pages workflow and live endpoint again.
 
 ## Important assumptions
 
