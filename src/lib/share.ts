@@ -51,7 +51,7 @@ const parseRateChange = (value: unknown): RateChange => {
   return {
     id: optionalString(value, 'id', ''),
     date: optionalString(value, 'date', ''),
-    annualRate: optionalNumber(value, 'annualRate', 0),
+    annualRate: optionalNumber(value, 'annualRate', Number.NaN),
     mode: optionalEnum(value, 'mode', ['keep-emi', 'keep-tenure'] as const, 'keep-emi'),
   }
 }
@@ -61,7 +61,7 @@ const parsePrepayment = (value: unknown): Prepayment => {
   return {
     id: optionalString(value, 'id', ''),
     date: optionalString(value, 'date', ''),
-    amount: optionalNumber(value, 'amount', 0),
+    amount: optionalNumber(value, 'amount', Number.NaN),
     frequency: optionalEnum(value, 'frequency', ['once', 'monthly', 'quarterly', 'yearly'] as const, 'once'),
   }
 }
@@ -72,7 +72,7 @@ const parseTransaction = (value: unknown): OdTransaction => {
     id: optionalString(value, 'id', ''),
     date: optionalString(value, 'date', ''),
     type: optionalEnum(value, 'type', ['deposit', 'withdrawal'] as const, 'deposit'),
-    amount: optionalNumber(value, 'amount', 0),
+    amount: optionalNumber(value, 'amount', Number.NaN),
   }
 }
 

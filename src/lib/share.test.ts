@@ -42,6 +42,24 @@ describe('scenario sharing', () => {
     expect(decoded?.od.enabled).toBe(false)
   })
 
+  it('preserves missing list-member numbers as invalid sentinels', () => {
+    const decoded = decodeScenario(`#v1=${encodeRaw({
+      rateChanges: [{ id: 'rate' }],
+      prepayments: [{ id: 'prepay' }],
+      od: { transactions: [{ id: 'tx' }] },
+    })}`)
+
+    expect(decoded).not.toBeNull()
+    if (!decoded) throw new Error('Expected a structurally decoded scenario')
+    const [rateChange] = decoded.rateChanges
+    const [prepayment] = decoded.prepayments
+    const [transaction] = decoded.od.transactions
+    if (!rateChange || !prepayment || !transaction) throw new Error('Expected decoded list members')
+    expect(rateChange.annualRate).toBeNaN()
+    expect(prepayment.amount).toBeNaN()
+    expect(transaction.amount).toBeNaN()
+  })
+
   it.each(['rateChanges', 'prepayments', 'transactions'] as const)(
     'rejects %s lists over 100 entries',
     (list) => {
