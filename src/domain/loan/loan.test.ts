@@ -291,6 +291,28 @@ describe('loan engine', () => {
     expect(result.ownershipCostOverOriginalTenure).toBe(result.monthlyOwnershipCost * base.tenureMonths)
   })
 
+  it.each([
+    { frequency: 'once', expected: [0, 100, 0, 0, 0, 0, 0], total: 100 },
+    { frequency: 'monthly', expected: [0, 100, 100, 100, 100, 100, 100], total: 2_200 },
+    { frequency: 'quarterly', expected: [0, 100, 0, 100, 100, 0, 100], total: 800 },
+    { frequency: 'yearly', expected: [0, 100, 0, 0, 100, 0, 0], total: 200 },
+  ] as const)('applies $frequency prepayments on the correct cycles', ({ frequency, expected, total }) => {
+    const startDate = '2026-01-31'
+    const result = calculateLoan(scenarioWith({
+      homeValue: 100_000,
+      downPayment: 0,
+      downPaymentMode: 'amount',
+      annualRate: 0,
+      tenureMonths: 24,
+      startDate,
+      prepayments: [{ id: frequency, date: addMonths(startDate, 2), amount: 100, frequency }],
+    }))
+    const inspectedCycles = [1, 2, 3, 5, 14, 15, 23]
+
+    expect(inspectedCycles.map((cycle) => result.standard.schedule[cycle - 1]?.prepayment)).toEqual(expected)
+    expect(result.standard.totalPrepayments).toBe(total)
+  })
+
   it('calculates the largest recurring-prepayment schedule promptly', () => {
     const base = defaultScenario()
     const scenario = scenarioWith({
