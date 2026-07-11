@@ -2,13 +2,13 @@
 
 Date: 2026-07-11
 
-Scope: current committed application at `5df8c28` plus read-only audit scripts outside the repository.
+Baseline scope: committed application at `5df8c28` plus read-only audit scripts outside the repository. Resolution evidence below covers hardening commits through `a231459`.
 
 ## Executive result
 
 The selected stack is appropriate for a static financial calculator. The initial production payload is small, normal and maximum OD calculations are fast, cross-browser behavior is consistent, the application makes no runtime network requests, and 1,000 deterministic randomized scenarios preserved the tested financial invariants. A rewrite, Web Worker, service worker, state library, UI kit, or decimal dependency is not justified.
 
-The application is not ready to be called fully hardened. Four correctness defects, one pathological recurring-prepayment algorithm, incomplete shared-state validation, eager schedule rendering, mobile touch-target issues, and CI privilege concentration require fixes. A literal guarantee of zero maintenance for 10–20 years is impossible on GitHub/npm/browser infrastructure; the achievable target is a reproducible, dependency-light static artifact that continues serving without active application infrastructure.
+The hardening work resolved every confirmed correctness, performance, accessibility, and medium-priority threat finding listed below. Regression tests now cover the corrected semantics, browser behavior, list limits, and Pages-subpath deployment. Physical-device, screen-reader, slow-network, and thermal/battery testing remain outside the automated evidence. GitHub/npm/browser changes still require routine maintenance; the static architecture removes application-server operations but does not guarantee permanent compatibility.
 
 ## Evidence baseline
 
@@ -30,25 +30,25 @@ Local preview timings are regression baselines, not real-user network benchmarks
 
 ## Confirmed correctness findings
 
-| ID | Priority | Finding | Evidence | Required outcome |
+| ID | Priority | Finding | Resolution | Commit and regression evidence |
 |---|---|---|---|---|
-| COR-001 | High | A structurally malformed but valid-version shared fragment crashes the page. | A fragment with `rateChanges: [null]` produces `Cannot read properties of null (reading 'date')`; `src/lib/share.ts:decodeScenario` trusts nested array members. | Normalize only declared fields/types or reject the fragment and load defaults with a warning. |
-| COR-002 | High | Money rounding is not reliably half-up. | `roundMoney(10.075)` returns `10.07`; `src/domain/loan/index.ts:roundMoney`. | Use a tested non-negative paise half-up implementation and retain fractional paise only inside daily accrual. |
-| COR-003 | High | “Net debt-free date” can be false after a later withdrawal. | Full opening offset followed by withdrawal retains the opening date while later net utilization is positive. | Define the date as the first day after the final utilized day, considering all future scenario events. |
-| COR-004 | Medium | Duplicate rate changes on the same EMI date silently overwrite in a `Map`. | `src/domain/loan/index.ts:buildStandardSchedule`. | Reject duplicate rate-change dates; reject exact duplicate IDs/dates where ambiguity affects semantics. |
-| COR-005 | Medium | Same-date recurring contribution and arbitrary OD transactions are attributed to adjacent monthly rows. | Contributions are added after one row while that EMI-date transaction is processed at the start of the next period. | Keep calculation order explicit and make schedule/export attribution match the event date. |
-| COR-006 | Medium | Print remains enabled for invalid current inputs and prints the last valid result. | Share/CSV/XLSX buttons are disabled on errors; print is not (`src/App.tsx`). | Disable print or visibly label the retained result as stale. |
-| COR-007 | Low | Disabled OD transaction rows remain exportable in the workbook scenario sheet. | `src/lib/exports.ts` exports the stored list regardless of `transactionsEnabled`. | Export an enabled flag or only active transactions so the workbook is not misleading. |
+| COR-001 | High | A structurally malformed but valid-version shared fragment crashes the page. | **Resolved.** The decoder parses declared fields as one unit, rejects invalid nested values, discards unknown keys, and falls back with a warning. | `e73b736`, `8eec604`; `src/lib/share.test.ts` malformed, declared-field, and nested-key cases; `e2e/sharing-errors.spec.ts`. |
+| COR-002 | High | Money rounding is not reliably half-up. | **Resolved.** Money posting uses symmetric round-half-away-from-zero to paise, including negative values; daily accrual retains fractional paise until posting. | `5257de2`; `src/domain/loan/loan.test.ts` “rounds fractional paise symmetrically” and Actual/365 posting cases. |
+| COR-003 | High | A temporary full offset was reported as the net debt-free date before a later withdrawal. | **Resolved.** The result reports the day after the final positive-utilization day only when the horizon ends debt-free. | `0edf5a1`; `src/domain/loan/loan.test.ts` “reports only a permanent net debt-free date”. |
+| COR-004 | Medium | Duplicate rate changes on the same EMI date silently overwrite in a `Map`. | **Resolved.** Validation rejects duplicate IDs, duplicate rate-change dates, blank IDs, malformed members, and over-limit lists before schedule generation. | `938e53f`, `90ec54f`; duplicate/list and malformed-member cases in `src/domain/loan/loan.test.ts`. |
+| COR-005 | Medium | Same-date recurring contribution and arbitrary OD transactions were attributed to adjacent monthly rows. | **Resolved.** The engine processes the whole date in defined order and commits its flows to that EMI-date row. | `0edf5a1`, `fe65ec8`; same-day ordering, EMI-date attribution, and invalid-withdrawal atomicity cases in `src/domain/loan/loan.test.ts`. |
+| COR-006 | Medium | Print remained enabled for invalid current inputs and printed the last valid result. | **Resolved.** Current validation state disables print, sharing, CSV, and XLSX while the UI labels the retained result. | `a9218f7`, `3857f1f`; `e2e/sharing-errors.spec.ts` invalid-input action checks. |
+| COR-007 | Low | Disabled OD transaction rows remained exportable in the workbook scenario sheet. | **Resolved.** The workbook omits inactive transaction rows and exposes the transaction-enabled state. | `856b35a`; `src/lib/exports.test.ts` disabled optional-data case. |
 
 ## Confirmed performance findings
 
-| ID | Priority | Finding | Cause | Required outcome |
+| ID | Priority | Finding | Resolution | Commit and regression evidence |
 |---|---|---|---|---|
-| PERF-001 | High | Recurring prepayments can freeze the page. | For each month and prepayment, `prepaymentDue` scans up to 600 cycles and repeatedly constructs UTC dates: approximately 28.8 million conversions at the intended maximum. | Convert dates to verified cycle indices once and use arithmetic frequency checks. |
-| PERF-002 | Medium | Each scenario edit calculates twice. | `setNextScenario` calculates for `lastValidResult`, then `useMemo` calculates the same scenario again. | Store the current calculation with the scenario and calculate once per state transition. |
-| PERF-003 | Medium | Schedule rendering constructs thousands of formatters and DOM nodes. | `formatCurrency` creates an `Intl.NumberFormat` each call; every collapsed year’s monthly rows are mounted. | Cache formatters and mount monthly rows only for expanded years. |
-| PERF-004 | Low | ExcelJS produces a 256 KB gzip lazy chunk and 88 transitive production packages. | Typed XLSX generation is a complex format and ExcelJS is lazy-loaded. | Retain it for correctness; keep it isolated from initial load and cover workbook generation with tests. A custom XLSX writer would increase risk. |
-| PERF-005 | None | The daily OD loop is not a real bottleneck. | It is bounded to roughly 18,300 simple day iterations and a 480-month/100-transaction case averages 2.33 ms. | Keep the explicit daily ledger for auditability; do not replace it with a harder-to-verify segmented engine. |
+| PERF-001 | High | Recurring prepayments could freeze the page. | **Resolved.** Dates are converted to direct cycle indexes once; recurrence uses integer interval arithmetic. | `5257de2`, `99f5033`, `296bd91`; frequency, anchored recurrence, direct-index, and supported-maximum timing cases in `src/domain/loan/loan.test.ts`. |
+| PERF-002 | Medium | Each scenario edit calculated twice. | **Resolved.** Scenario state stores the current calculation and last valid calculation from one transition. | `a9218f7`, `3857f1f`; state path in `src/App.tsx` and invalid-transition coverage in `e2e/sharing-errors.spec.ts`. |
+| PERF-003 | Medium | Schedule rendering constructed thousands of formatters and mounted collapsed monthly tables. | **Resolved.** Currency formatters are cached and monthly rows mount only for the open year. | `856b35a`, `af3ec4f`; lazy-mount and role-reset cases in `e2e/accessibility.spec.ts`. |
+| PERF-004 | Low | ExcelJS adds a large lazy chunk and transitive dependency graph. | **Resolved.** ExcelJS remains isolated behind the user-triggered XLSX path and workbook behavior has regression coverage; no custom writer was added. | `856b35a`; typed and disabled-data workbook cases in `src/lib/exports.test.ts`; download case in `e2e/exports.spec.ts`. |
+| PERF-005 | None | The bounded daily OD ledger was not a measured bottleneck. | **Resolved.** The explicit daily ledger remains for auditability, with maximum-horizon and reconciliation coverage. | `8443a91`, `1e32c4d`; maximum supported loan and accounting invariants in `src/domain/loan/loan.test.ts`. |
 
 ## Browser and mobile matrix
 
@@ -66,13 +66,13 @@ Additional responsive inspection passed at 320×568, 375×812, 430×932, 768×10
 
 ## Accessibility and mobile findings
 
-| ID | Priority | Finding | Evidence | Required outcome |
+| ID | Priority | Finding | Resolution | Commit and regression evidence |
 |---|---|---|---|---|
-| UX-001 | Medium | Unit toggles, Reset/Add controls, wordmark and visible switch control are below 44 px in one dimension. | Automated bounding-box scan across all six viewports. | Give interactive controls a minimum 44 px target without materially increasing visual weight. |
-| UX-002 | Medium | Errors are not programmatically tied to responsible inputs. | Central message list only; fields lack `aria-invalid` and `aria-describedby`. | Return field-keyed validation and attach concise inline errors. |
-| UX-003 | Low | Field hint text becomes part of accessible names and produces partial-name ambiguity. | “Home value” also partially matched the calculated-loan field in browser automation. | Use explicit label spans/`aria-describedby` so hints remain descriptions. |
-| UX-004 | Medium | All collapsed schedule years still mount their monthly tables. | 3,034 initial DOM nodes for the 240-month default. | Render the table only when its native `<details>` year is expanded. |
-| UX-005 | Low | Share provenance is easy to miss. | Malformed links warn, but valid received links are indistinguishable from local input. | Show a persistent, non-alarming “Loaded from a shared link—verify inputs” notice. |
+| UX-001 | Medium | Several controls were below 44 px in one dimension. | **Resolved.** Interactive targets meet the 44 px minimum in the tested layouts. | `b45d96e`; six-viewport target and overflow checks in `e2e/accessibility.spec.ts`. |
+| UX-002 | Medium | Errors were not programmatically tied to responsible inputs. | **Resolved.** Field-keyed issues drive inline messages, `aria-invalid`, and `aria-describedby`. | `a9218f7`, `3857f1f`; inline-error assertions in `e2e/sharing-errors.spec.ts`. |
+| UX-003 | Low | Hint text became part of accessible names and caused partial-name ambiguity. | **Resolved.** Labels and descriptions have separate elements and explicit description references. | `a9218f7`, `3857f1f`; role/label locators across `e2e/app.spec.ts` and `e2e/sharing-errors.spec.ts`. |
+| UX-004 | Medium | Collapsed schedule years still mounted monthly tables. | **Resolved.** Only the expanded year's table mounts. | `856b35a`, `af3ec4f`; lazy schedule cases in `e2e/accessibility.spec.ts`. |
+| UX-005 | Low | Share provenance was easy to miss. | **Resolved.** Received valid fragments show a persistent verification notice until reset or local edits clear provenance. | `a9218f7`; provenance and cross-context round-trip cases in `e2e/sharing-errors.spec.ts`. |
 
 ## Security findings
 
@@ -82,36 +82,22 @@ The full repository-grounded analysis is in `loan_emi_calculator-threat-model.md
 - URL fragments are the only remote attacker-controlled runtime entry point.
 - Shared links intentionally disclose all encoded inputs to anyone who receives the URL.
 - Build/deploy dependency execution is the primary privileged boundary.
-- Build and deploy should be separate jobs so npm code runs without Pages write or OIDC permissions.
-- Action references should be immutable commits with automated update support, or the mutable-tag risk must remain explicitly accepted.
+- Build and deploy use separate jobs, so npm code runs without Pages write or OIDC permissions.
+- GitHub Actions use immutable commit references, and Dependabot tracks action and npm updates.
 - A meta CSP would not provide `frame-ancestors` protection and could complicate Vite development; with no runtime injection sink or remote content, it is not currently the highest-value control.
 
-## Test coverage gaps
+## Regression coverage after hardening
 
-The existing suite covers core formulas, Actual/365, leap dates, OD equality, deposits/withdrawals, rate modes, fees, limits, reconciliation, sharing, typed XLSX and one broad browser flow. Missing regression evidence includes:
+Unit tests now cover malformed and unknown shared-state fields, symmetric paise boundaries, duplicate IDs and rate dates, all three list caps, permanent net debt-free semantics, same-day OD attribution and atomic failures, every prepayment frequency, month-end anchoring, boundary inputs, mode bases, disabled optional data, maximum supported schedules, and randomized reconciliation. Playwright covers invalid-action blocking, provenance and cross-context sharing, lazy schedule mounting, six responsive dimensions, and the five configured browser projects. The workflow builds and tests the Pages subpath in an unprivileged job before the privileged deploy job receives the artifact.
 
-- Deep malformed shared-state types and prototype-shaped/unexpected keys.
-- Half-up rounding boundary table.
-- Duplicate rate/prepayment dates and list limits.
-- Permanent net-debt-free date after future withdrawals.
-- Exact same-day rate/payment/prepayment/contribution/arbitrary-transaction attribution.
-- All four prepayment frequencies across month-end dates.
-- Zero-rate, one-month, maximum-rate, maximum-tenure and early-payoff boundary matrix.
-- Percentage/amount bases for every dual-mode input.
-- Disabled optional data being ignored in UI and exports.
-- Invalid-current-input behavior for print and all exports.
-- Shared-link provenance and round-trip in a new browser context.
-- Maximum supported scenario performance budget.
-- Lazy schedule DOM budget and expand/collapse behavior.
-- Touch targets and no-overflow assertions for mobile Chrome and WebKit.
-- CI workflow permission and Pages-subpath checks after job separation.
+The automated matrix uses browser engines and mobile emulation. Physical devices, screen readers, slow networks, and thermal/battery behavior remain manual residual checks.
 
 ## Maintenance assessment
 
 - Keep Vite + React + TypeScript. Rewriting the working UI in vanilla JavaScript would trade a small bundle reduction for much greater regression and maintenance risk.
 - Keep the pure financial engine outside React and preserve native controls/SVG/CSS.
 - Keep ExcelJS lazy. Its latest stable release is older and has a large transitive graph, but replacing a standards-compliant XLSX writer with custom ZIP/XML code is the less maintainable choice.
-- Pin the Node/npm build toolchain and exact direct dependencies; retain `package-lock.json` and a clean `npm ci` path.
+- Keep the pinned Node/npm build toolchain, exact direct dependencies, `package-lock.json`, and clean `npm ci --ignore-scripts` path current.
 - Keep the deployed product fully static with no service worker, backend, analytics, remote fonts, or runtime API dependency.
 - Add a reproducible release verification command and archive a verified build artifact with each release if long-term rebuild independence becomes a requirement.
 - Re-run this audit whenever a backend, authentication, telemetry, third-party runtime script, lender-specific guarantee, or regulated use is introduced.

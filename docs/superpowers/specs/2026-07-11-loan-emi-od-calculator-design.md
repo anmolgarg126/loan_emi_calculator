@@ -62,7 +62,7 @@ OD deposits never become prepayments. A prepayment permanently reduces drawing p
 - Arbitrary dated transactions enabled: `false`.
 - Rate-change mode: keep EMI and adjust tenure.
 - Day-count convention: Actual calendar days divided by a fixed 365-day denominator, including during leap years.
-- Currency: INR represented in paise; daily accrual may retain fractional paise, and posted interest is rounded half-up to the nearest paise once per monthly posting.
+- Currency: INR represented in paise; daily accrual may retain fractional paise. Posted money uses symmetric round-half-away-from-zero to the nearest paise, which is half-up for non-negative amounts: `10.075` becomes `10.08` and `-10.075` becomes `-10.08`.
 - Date representation: ISO `YYYY-MM-DD` parsed to an integer calendar-day index without local-time or daylight-saving arithmetic.
 
 ## Event processing
@@ -80,6 +80,8 @@ For every event date, the engine uses this order:
 
 Monthly OD interest is posted on the EMI date. Standard-loan interest remains monthly reducing. Rate changes and permanent prepayments are restricted to EMI dates so the standard engine does not imply unsupported mid-cycle repricing; arbitrary OD deposits and withdrawals may occur on any calendar date. Events after payoff are rejected during validation rather than silently ignored.
 
+The engine converts every EMI-cycle date to a direct integer cycle index once. Monthly, quarterly, yearly, and one-time recurrence checks then use integer interval arithmetic; they do not scan up to the 600-month calculation horizon for each payment. On an EMI date, the schedule row records that date's scheduled transfer, prepayment, recurring surplus, arbitrary deposits, and arbitrary withdrawals together. If a same-day withdrawal exceeds available parked surplus after deposits, the engine rejects the calculation before committing that row or its fee.
+
 The scheduled OD transfer equals the standard EMI calculated for full utilization. Its contractual principal component reduces drawing power. Actual daily OD interest is charged separately; when the scheduled transfer exceeds actual interest plus the contractual principal reduction, the difference increases parked surplus and remains withdrawable.
 
 ## Rate changes
@@ -95,13 +97,15 @@ The effective OD rate is the active standard rate plus the OD premium. The premi
 
 ## User interface
 
-The app is one responsive page. Essential loan inputs appear first. Homeowner costs, prepayments, rate changes, OD, and arbitrary OD transactions are optional sections. Rate changes and prepayments select an EMI cycle; arbitrary OD transactions use native calendar dates. Enabling OD reveals the premium, effective rate, one-time setup fee, annual fee, opening parked surplus in rupees or percentage of original principal, and monthly contribution. Enabling arbitrary transactions reveals rows with date, deposit/withdrawal type, amount, and remove action, capped at 100 rows.
+The app is one responsive page. Essential loan inputs appear first. Homeowner costs, prepayments, rate changes, OD, and arbitrary OD transactions are optional sections. Rate changes and prepayments select an EMI cycle; arbitrary OD transactions use native calendar dates. Enabling OD reveals the premium, effective rate, one-time setup fee, annual fee, opening parked surplus in rupees or percentage of original principal, and monthly contribution. Enabling arbitrary transactions reveals rows with date, deposit/withdrawal type, amount, and remove action. Rate changes, prepayments, and arbitrary OD transactions are each capped at 100 rows.
 
 The calculated loan amount is read-only. Every percentage states its basis. Terminology uses “drawing power,” “parked surplus,” “available withdrawal,” and “net utilized balance,” avoiding the ambiguous phrase “OD balance.” Native date inputs, visible focus, keyboard operation, inline errors, and Reset are required.
 
 ## Results
 
 The primary comparison shows standard EMI, effective OD rate, standard interest, OD interest, one-time and annual OD fees, fee-adjusted savings, and payoff dates. OD savings include only the difference in lender interest minus OD-specific fees. Supporting balances show drawing power, parked surplus, available withdrawal, net utilized balance, and accrued interest. Opening or recurring parked surplus is liquidity, not an upfront cost.
+
+The net debt-free date is the first calendar day after the final day on which net utilized balance is positive, and the calculator reports it only when the simulated horizon ends with no net utilization. A temporary full offset followed by a later withdrawal is not debt-free.
 
 Costs remain separate:
 
@@ -116,7 +120,7 @@ The page includes one native-SVG cost-composition chart, one native-SVG balance 
 
 ## Persistence and privacy
 
-Shared scenarios use a versioned URL fragment, not query parameters. The fragment is validated before use, rejected when its encoded length exceeds 8,000 characters, and is not automatically transmitted to the host. Sharing is always user-initiated. V1 does not persist named scenarios locally.
+Shared scenarios use a versioned URL fragment, not query parameters. The decoder accepts declared fields only and parses supplied declared fields as one unit: an invalid supplied scalar, enum, nested object, list member, or list ID rejects the whole fragment and loads defaults with a warning. Unknown fields are discarded. Each optional list is capped at 100 entries, and fragments longer than 8,000 encoded characters are rejected. A fragment is not automatically transmitted to the host. Sharing is always user-initiated. V1 does not persist named scenarios locally.
 
 ## Exports
 
@@ -148,17 +152,17 @@ Headers are frozen and tabular sheets have filters. The workbook contains assump
 
 ## Validation and error handling
 
-Validation rejects missing required values, negative money values where not meaningful, invalid tenure or rate changes, rate changes or prepayments outside an EMI cycle, OD transactions before loan start or after payoff, more than 100 arbitrary OD transactions, withdrawals above available surplus, unsupported or over-8,000-character share fragments, unsafe numeric magnitudes, and EMIs that cannot cover interest. V1 accepts home value and principal above zero up to ₹100 crore, other money values from zero to ₹100 crore, tenure from 1 to 480 months, standard annual rates from 0% to 50%, OD premiums from 0% to 20%, and ordinary percentage inputs from 0% to 100%. A keep-EMI rate reset that would extend calculation beyond 600 months is rejected with a warning to increase EMI. These are calculator safety limits, not lending eligibility rules.
+Validation rejects missing required values, negative money values where not meaningful, invalid tenure or rate changes, rate changes or prepayments outside an EMI cycle, duplicate or blank list IDs, duplicate rate-change dates, more than 100 entries in any rate-change, prepayment, or OD-transaction list, OD transactions before loan start or on/after payoff, withdrawals above available surplus, unsupported or over-8,000-character share fragments, unsafe numeric magnitudes, and EMIs that cannot cover interest. V1 accepts home value and principal above zero up to ₹100 crore, other money values from zero to ₹100 crore, tenure from 1 to 480 months, standard annual rates from 0% to 50%, OD premiums from 0% to 20%, and ordinary percentage inputs from 0% to 100%. A keep-EMI rate reset that would extend calculation beyond 600 months is rejected with a warning to increase EMI. These are calculator safety limits, not lending eligibility rules.
 
-Errors appear beside the responsible input. Invalid calculations do not replace the last valid results. Malformed shared fragments are ignored with a warning. Print, CSV, and XLSX failures produce recoverable messages and never corrupt the active scenario.
+The engine validates the complete scenario before schedule generation. Blocking validation issues return field-keyed errors and empty schedules. Runtime OD withdrawal checks commit the affected date's row and fee only after every event on that date succeeds. Errors appear beside the responsible input; the UI retains the last valid results and disables print, sharing, CSV, and XLSX while current inputs are invalid. Malformed shared fragments load defaults with a warning. Export failures produce recoverable messages and leave the active scenario unchanged.
 
 ## Testing
 
-Vitest covers golden standard-loan cases, fractional-paise accumulation and monthly half-up posting, UTC-safe date conversion, OD-disabled equality, Actual/365 accrual, same-day event ordering, both rate-reset modes, infeasible EMI detection, opening and monthly surplus, arbitrary deposits and withdrawals, 100-event and fragment-length limits, one-time and annual fees, excess surplus, withdrawal caps, prepayment separation, fixed ownership-cost horizon, leap dates, early payoff, malformed fragments, and reconciliation invariants.
+Vitest covers golden standard-loan cases, symmetric paise rounding, fractional-paise accumulation and monthly posting, direct cycle indexes, UTC-safe date conversion, OD-disabled equality, Actual/365 accrual, same-day event ordering and row attribution, both rate-reset modes, infeasible EMI detection, opening and monthly surplus, arbitrary deposits and withdrawals, all three 100-entry list limits, fragment parsing and length limits, one-time and annual fees, excess surplus, withdrawal caps, permanent net debt-free semantics, atomic invalid-date handling, prepayment separation, fixed ownership-cost horizon, leap dates, early payoff, and reconciliation invariants.
 
 Export tests compare UI and schedule values with CSV output, then reopen the generated XLSX workbook to verify sheet names, cell values, native cell types, number formats, formulas, and totals. At least one standard and one OD fixture are cross-checked against an independent spreadsheet; a lender statement may be used only as an explicitly labelled reference fixture.
 
-One Playwright smoke test runs against the built production preview and covers the primary desktop and mobile flow, OD and transaction toggles, rate-reset selection, sharing, print preparation, CSV, and XLSX download initiation.
+Playwright runs the built production preview in desktop Chromium, Firefox, and WebKit plus Pixel 5 Chrome and iPhone 13 WebKit emulation. It covers the primary flow, OD and transaction toggles, both rate-reset modes, sharing and malformed links, invalid-action blocking, print preparation, CSV/XLSX downloads, mobile dimensions, and lazy schedule expansion. Physical-device, screen-reader, slow-network, and thermal/battery checks remain manual residual work.
 
 ## Deployment
 
@@ -171,7 +175,8 @@ Vite builds static files into `dist`. GitHub Actions runs lint, type-check, unit
 - Arbitrary transaction dates affect OD interest by their actual active days.
 - Both rate-reset modes produce deterministic schedules.
 - Prepayments cannot be withdrawn; OD surplus can be withdrawn within limits.
-- Daily interest accumulates fractional paise and rounds only at monthly posting.
+- Daily interest accumulates fractional paise; posted money rounds symmetrically to paise.
+- A reported net debt-free date remains debt-free through the end of the simulated horizon.
 - OD savings exclude parked liquidity and ownership expenses.
 - UI, tables, charts, CSV, and XLSX reconcile to the same result model.
 - XLSX dates and numbers are native typed cells, not display strings.

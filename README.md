@@ -4,8 +4,11 @@ A lender-neutral Indian home-loan EMI and overdraft calculator. It models monthl
 
 ## Run locally
 
+Use Node 24.18.x and npm 11.16.x. The exact npm version is recorded in `package.json`; `.nvmrc` selects Node 24.18.0.
+
 ```sh
-npm ci
+nvm use
+npm ci --ignore-scripts
 npm run dev
 ```
 
@@ -13,14 +16,26 @@ Open the local URL printed by Vite.
 
 ## Verify
 
+Start from a clean checkout, then run the same install and non-browser verification used by CI:
+
 ```sh
-npm run lint
-npm run typecheck
-npm test
-npm run build
-npx playwright install chromium
+npm ci --ignore-scripts
+npm run verify
+npx playwright install chromium firefox webkit
 npm run test:e2e
 ```
+
+`npm run verify` runs lint, type-checking, unit tests, and the production build. The Playwright command runs five configured projects: desktop Chromium, Firefox, and WebKit plus Pixel 5 Chrome and iPhone 13 WebKit emulation.
+
+To verify the GitHub Pages subpath locally, replace `YOUR_GITHUB_OWNER` and run:
+
+```sh
+export OWNER=YOUR_GITHUB_OWNER
+VITE_BASE_PATH=/loan_emi_calculator/ VITE_SITE_URL="https://${OWNER}.github.io/loan_emi_calculator/" npm run build
+VITE_BASE_PATH=/loan_emi_calculator/ npm run test:e2e
+```
+
+The browser suite checks responsive layouts, keyboard focus, reduced motion, touch-target dimensions, share/error flows, lazy schedules, and exports through automated desktop browsers and mobile emulation. It does not replace testing on physical phones, with a screen reader, or by a person reviewing the financial workflow. Slow-network and thermal/battery behavior also remain manual residual checks.
 
 ## Exports
 
@@ -30,7 +45,7 @@ npm run test:e2e
 
 ## Deployment
 
-Pushes to `main` are verified and deployed through GitHub Actions. The live URL is derived automatically:
+Pushes to `main` are verified and deployed through GitHub Actions. The build job has read-only repository access; only the separate deploy job receives Pages and OIDC write permissions. The live URL is derived automatically:
 
 `https://<current-repository-owner>.github.io/loan_emi_calculator/`
 

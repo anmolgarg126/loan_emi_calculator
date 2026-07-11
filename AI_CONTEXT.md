@@ -24,8 +24,12 @@ Keep this file concise. Update the design first when financial behavior changes,
 - OD savings include lender-interest difference minus one-time and annual OD fees. Ownership costs and parked liquidity are excluded.
 - Ownership costs remain constant over the original contracted tenure, even when the loan pays off early.
 - Dates are ISO `YYYY-MM-DD` converted through UTC calendar-day arithmetic. Do not use local-time date math in the financial engine.
-- Daily interest may retain fractional paise; round half-up to paise only when monthly interest posts.
-- Share state belongs in a versioned URL fragment and must never exceed 8,000 characters.
+- EMI-cycle dates are converted once to direct cycle indexes. Recurrence checks use integer interval arithmetic rather than scanning candidate dates.
+- Rate changes, prepayments, and arbitrary OD transactions are each capped at 100 entries.
+- Daily interest may retain fractional paise. Posted money uses symmetric round-half-away-from-zero to paise, which is half-up for non-negative amounts; `10.075` becomes `10.08` and `-10.075` becomes `-10.08`.
+- Same-day OD processing posts prior-day interest, applies the scheduled transfer and permanent prepayment, credits recurring surplus, then nets arbitrary deposits before withdrawals. An EMI-date row includes every flow from that date.
+- Net debt-free means the first calendar day after the final day with positive net utilization, and is reported only when the simulated horizon ends debt-free. A temporary full offset before a later withdrawal does not qualify.
+- Share state belongs in a versioned URL fragment and must never exceed 8,000 characters. The decoder reads declared fields only and rejects the whole fragment if any supplied declared field, nested object, list member, or list ID has an invalid type or shape; unknown fields are discarded.
 - No backend, accounts, analytics, telemetry, remote scripts, or automatic transmission of financial inputs.
 - CSV values remain machine-readable. XLSX dates, numbers, percentages, integers, and Booleans must remain native typed cells.
 
@@ -47,6 +51,7 @@ plan.md             Implementation scope
 
 - Financial formulas stay outside React.
 - Prefer focused typed functions over new abstractions or dependencies.
+- Validate the complete scenario before building schedules. Blocking issues return field-keyed errors and empty schedules; the UI keeps the last valid result and disables print, sharing, and downloads. A same-day OD withdrawal failure does not commit that date's schedule row or fee.
 - Keep input labels and result terminology aligned with the design: drawing power, parked surplus, available withdrawal, and net utilized balance.
 - Do not reintroduce break-even estimates, named local scenarios, pre-EMI, tax advice, custom lender presets, or cloud storage without a new approved design.
 - Update golden tests whenever rounding, event order, payment allocation, fees, or date rules change.
@@ -56,17 +61,15 @@ plan.md             Implementation scope
 ## Commands
 
 ```sh
+nvm use
 npm ci
 npm run dev
-npm run lint
-npm run typecheck
-npm test
-npm run build
-npx playwright install chromium
+npm run verify
+npx playwright install chromium firefox webkit
 npm run test:e2e
 ```
 
-The Playwright test expects a completed `dist` build. `npm run test:e2e` starts `vite preview` automatically.
+Use `npm ci --ignore-scripts` when reproducing CI exactly. The Playwright suite expects a completed `dist` build, starts `vite preview` automatically, and runs desktop Chromium, Firefox, WebKit, Pixel 5 Chrome emulation, and iPhone 13 WebKit emulation. Physical-device, screen-reader, slow-network, and thermal/battery checks remain manual.
 
 ## Deployment
 
