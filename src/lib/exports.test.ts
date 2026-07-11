@@ -85,14 +85,28 @@ describe('exports', () => {
     expect(monthly.getCell('D2').numFmt).toContain('₹')
 
     const assumptions = reopened.getWorksheet('Assumptions')!
-    expect(assumptions.getCell('B2').value).toBe(result.scenario.homeValue)
-    expect(assumptions.getCell('B3').value).toBe(result.loanAmount)
-    expect(assumptions.getCell('B4').value).toBe(result.scenario.annualRate / 100)
-    expect(assumptions.getCell('B7').value).toBe(odEnabled)
-    expect(assumptions.getCell('B9').value).toBe('Actual/365')
-    expect(typeof assumptions.getCell('B2').value).toBe('number')
-    expect(typeof assumptions.getCell('B7').value).toBe('boolean')
-    expect(typeof assumptions.getCell('B9').value).toBe('string')
+    const expectedAssumptions = [
+      ['B2', result.scenario.homeValue, 'number', '₹#,##0.00;[Red]-₹#,##0.00'],
+      ['B3', result.loanAmount, 'number', '₹#,##0.00;[Red]-₹#,##0.00'],
+      ['B4', result.scenario.annualRate / 100, 'number', '0.00%'],
+      ['B5', result.scenario.tenureMonths, 'number', '0'],
+      ['B6', result.scenario.startDate, 'date', 'dd-mmm-yyyy'],
+      ['B7', odEnabled, 'boolean', undefined],
+      ['B8', result.scenario.od.premiumRate / 100, 'number', '0.00%'],
+      ['B9', 'Actual/365', 'string', undefined],
+      ['B10', 'Educational estimate; verify against lender terms.', 'string', undefined],
+    ] as const
+    expectedAssumptions.forEach(([address, expectedValue, expectedType, expectedNumFmt]) => {
+      const cell = assumptions.getCell(address)
+      if (expectedType === 'date') {
+        expect(cell.value).toBeInstanceOf(Date)
+        expect((cell.value as Date).toISOString().slice(0, 10)).toBe(expectedValue)
+      } else {
+        expect(cell.value).toBe(expectedValue)
+        expect(typeof cell.value).toBe(expectedType)
+      }
+      expect(cell.numFmt).toBe(expectedNumFmt)
+    })
 
     const summary = reopened.getWorksheet('Comparison Summary')!
     expect(summary.getCell('B3').value).toBe(result.standard.totalInterest)

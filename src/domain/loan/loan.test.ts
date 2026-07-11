@@ -90,6 +90,45 @@ describe('loan engine', () => {
     expect(result.od.schedule.at(-1)?.netUtilized).toBe(0)
   })
 
+  it('accepts a derived loan amount at the money limit', () => {
+    const result = calculateLoan(scenarioWith({
+      homeValue: 999_999_999.99,
+      downPayment: 0,
+      downPaymentMode: 'amount',
+      loanInsurance: 0.01,
+      annualRate: 0,
+      tenureMonths: 1,
+    }))
+
+    expect(result.loanAmount).toBe(1_000_000_000)
+    expect(result.issues).toEqual([])
+    expect(result.standard.schedule).toHaveLength(1)
+  })
+
+  it('blocks a derived loan amount above the money limit', () => {
+    const result = calculateLoan(scenarioWith({
+      homeValue: 1_000_000_000,
+      downPayment: 0,
+      downPaymentMode: 'amount',
+      loanInsurance: 0.01,
+    }))
+
+    expect(result.loanAmount).toBe(1_000_000_000.01)
+    expect(result.issues).toContainEqual({
+      field: 'loanAmount',
+      message: 'Loan amount must not exceed ₹100 crore.',
+    })
+    expect(result.standard.schedule).toEqual([])
+    expect(result.od.schedule).toEqual([])
+    expect([
+      result.loanAmount,
+      result.standard.initialEmi,
+      result.standard.totalInterest,
+      result.od.totalInterest,
+      result.od.totalModelledOutflow,
+    ].every(Number.isFinite)).toBe(true)
+  })
+
   it('uses UTC-safe date-only arithmetic', () => {
     expect(fromEpochDay(toEpochDay('2028-02-29'))).toBe('2028-02-29')
     expect(addMonths('2026-01-31', 1)).toBe('2026-02-28')

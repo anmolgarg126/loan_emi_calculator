@@ -648,6 +648,9 @@ export const calculateLoan = (scenario: LoanScenario): CalculationResult => {
     finite(amountFromMode(finite(value), mode, finite(base)))
   const downPaymentAmount = safeAmountFromMode(scenario.downPayment, scenario.downPaymentMode, scenario.homeValue)
   const loanAmount = finite(roundMoney(finite(scenario.homeValue) + finite(scenario.loanInsurance) - downPaymentAmount))
+  if (loanAmount > MAX_MONEY) {
+    validationIssues.push({ field: 'loanAmount', message: 'Loan amount must not exceed ₹100 crore.' })
+  }
   const processingFeeAmount = safeAmountFromMode(scenario.processingFee, scenario.processingFeeMode, loanAmount)
   const oneTimeExpensesAmount = safeAmountFromMode(scenario.oneTimeExpenses, scenario.oneTimeExpensesMode, scenario.homeValue)
   const propertyTax = safeAmountFromMode(scenario.propertyTaxAnnual, scenario.propertyTaxMode, scenario.homeValue)

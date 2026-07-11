@@ -192,11 +192,12 @@ export const buildWorkbook = async (result: CalculationResult) => {
 
   const moneyFormat = '₹#,##0.00;[Red]-₹#,##0.00'
   const percentFormat = '0.00%'
-  assumptions.getColumn(2).numFmt = moneyFormat
-  assumptions.getCell('B4').numFmt = '0'
-  assumptions.getCell('B5').numFmt = 'dd-mmm-yyyy'
-  assumptions.getCell('B3').numFmt = percentFormat
-  assumptions.getCell('B7').numFmt = percentFormat
+  assumptions.getCell('B2').numFmt = moneyFormat
+  assumptions.getCell('B3').numFmt = moneyFormat
+  assumptions.getCell('B4').numFmt = percentFormat
+  assumptions.getCell('B5').numFmt = '0'
+  assumptions.getCell('B6').numFmt = 'dd-mmm-yyyy'
+  assumptions.getCell('B8').numFmt = percentFormat
   summary.getColumn(2).numFmt = moneyFormat
   summary.getColumn(3).numFmt = moneyFormat
   monthly.getColumn('date').numFmt = 'dd-mmm-yyyy'
