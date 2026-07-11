@@ -20,9 +20,26 @@ describe('exports', () => {
     expect(csv).not.toContain('₹')
     expect(header).toEqual(expect.arrayContaining(['Month', 'Standard EMI', 'Standard principal', 'Standard interest']))
     rows.forEach((row, index) => {
-      expect(row[0]).toBe(String(result.standard.schedule[index]!.month))
-      expect(row[1]).toBe(result.standard.schedule[index]!.date)
-      ;[0, 2, 3, 4, 5, 6, 7].forEach((column) => expect(Number.isFinite(Number(row[column]))).toBe(true))
+      const standard = result.standard.schedule[index]!
+      const od = result.od.schedule[index]!
+      expect(row).toEqual([
+        String(standard.month),
+        standard.date,
+        String(standard.annualRate / 100),
+        String(standard.emi),
+        String(standard.principal),
+        String(standard.interest),
+        String(standard.prepayment),
+        String(standard.balance),
+        String(od.annualRate / 100),
+        String(od.payment),
+        String(od.interest),
+        String(od.drawingPower),
+        String(od.parkedSurplus),
+        String(od.netUtilized),
+      ])
+      row.filter((_value, column) => column !== 1)
+        .forEach((value) => expect(Number.isFinite(Number(value))).toBe(true))
     })
   })
 
@@ -52,14 +69,56 @@ describe('exports', () => {
       'Assumptions', 'Comparison Summary', 'Monthly Amortization', 'Yearly Summary', 'OD Transactions',
     ])
     const monthly = reopened.getWorksheet('Monthly Amortization')!
+    const firstStandard = result.standard.schedule[0]!
+    const firstOd = result.od.schedule[0]!
+    expect(monthly.getCell('A2').value).toBe(firstStandard.month)
     expect(monthly.getCell('B2').value).toBeInstanceOf(Date)
+    expect((monthly.getCell('B2').value as Date).toISOString().slice(0, 10)).toBe(firstStandard.date)
+    expect(monthly.getCell('C2').value).toBe(firstStandard.annualRate / 100)
+    expect(monthly.getCell('D2').value).toBe(firstStandard.emi)
+    expect(monthly.getCell('F2').value).toBe(firstStandard.interest)
+    expect(monthly.getCell('K2').value).toBe(firstOd.interest)
+    expect(monthly.getCell('L2').value).toBe(firstOd.drawingPower)
+    expect(typeof monthly.getCell('A2').value).toBe('number')
     expect(typeof monthly.getCell('D2').value).toBe('number')
+    expect(monthly.getCell('C2').numFmt).toContain('%')
     expect(monthly.getCell('D2').numFmt).toContain('₹')
+
+    const assumptions = reopened.getWorksheet('Assumptions')!
+    expect(assumptions.getCell('B2').value).toBe(result.scenario.homeValue)
+    expect(assumptions.getCell('B3').value).toBe(result.loanAmount)
+    expect(assumptions.getCell('B4').value).toBe(result.scenario.annualRate / 100)
+    expect(assumptions.getCell('B7').value).toBe(odEnabled)
+    expect(assumptions.getCell('B9').value).toBe('Actual/365')
+    expect(typeof assumptions.getCell('B2').value).toBe('number')
+    expect(typeof assumptions.getCell('B7').value).toBe('boolean')
+    expect(typeof assumptions.getCell('B9').value).toBe('string')
+
+    const summary = reopened.getWorksheet('Comparison Summary')!
+    expect(summary.getCell('B3').value).toBe(result.standard.totalInterest)
+    expect(summary.getCell('C3').value).toBe(result.od.totalInterest)
+    expect(summary.getCell('C4').value).toBe(result.od.totalFees)
     const savingsFormula = reopened.getWorksheet('Comparison Summary')!.getCell('C5').value
     expect(savingsFormula).toEqual(odEnabled
       ? { formula: 'B3-C3-C4', result: result.od.feeAdjustedSavings }
       : { formula: 'B3-C3-C4' })
-    expect(reopened.getWorksheet('OD Transactions')!.getCell('D2').value).toBe(odEnabled)
-    expect(typeof reopened.getWorksheet('OD Transactions')!.getCell('D2').value).toBe('boolean')
+    const transactions = reopened.getWorksheet('OD Transactions')!
+    expect(transactions.getCell('A2').value).toBeInstanceOf(Date)
+    expect(transactions.getCell('B2').value).toBe('deposit')
+    expect(transactions.getCell('C2').value).toBe(10_000)
+    expect(transactions.getCell('C2').numFmt).toContain('₹')
+    expect(transactions.getCell('D2').value).toBe(odEnabled)
+    expect(typeof transactions.getCell('D2').value).toBe('boolean')
+
+    const yearly = reopened.getWorksheet('Yearly Summary')!
+    const yearlyPrincipal = Array.from({ length: yearly.rowCount - 1 }, (_, index) => Number(yearly.getCell(index + 2, 2).value))
+      .reduce((sum, value) => sum + value, 0)
+    const yearlyStandardInterest = Array.from({ length: yearly.rowCount - 1 }, (_, index) => Number(yearly.getCell(index + 2, 3).value))
+      .reduce((sum, value) => sum + value, 0)
+    const yearlyOdInterest = Array.from({ length: yearly.rowCount - 1 }, (_, index) => Number(yearly.getCell(index + 2, 4).value))
+      .reduce((sum, value) => sum + value, 0)
+    expect(yearlyPrincipal).toBeCloseTo(result.standard.schedule.reduce((sum, row) => sum + row.principal, 0), 2)
+    expect(yearlyStandardInterest).toBeCloseTo(result.standard.totalInterest, 2)
+    expect(yearlyOdInterest).toBeCloseTo(result.od.totalInterest, 2)
   })
 })

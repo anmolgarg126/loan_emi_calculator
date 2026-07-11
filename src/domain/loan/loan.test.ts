@@ -86,6 +86,8 @@ describe('loan engine', () => {
     expect(result.standard.schedule.at(-1)?.balance).toBe(0)
     expect(result.standard.schedule.length).toBeLessThanOrEqual(600)
     expect(result.od.schedule.length).toBeLessThanOrEqual(600)
+    expect(result.od.schedule.at(-1)?.drawingPower).toBe(0)
+    expect(result.od.schedule.at(-1)?.netUtilized).toBe(0)
   })
 
   it('uses UTC-safe date-only arithmetic', () => {
@@ -613,8 +615,8 @@ describe('loan engine', () => {
 
   it('uses loan principal as the opening-surplus percentage basis', () => {
     const base = scenarioWith({
-      homeValue: 4_000_000,
-      downPayment: 0,
+      homeValue: 5_000_000,
+      downPayment: 1_000_000,
       downPaymentMode: 'amount',
       tenureMonths: 12,
     })
@@ -624,9 +626,13 @@ describe('loan engine', () => {
     })
 
     expect(result.errors).toEqual([])
-    expect(result.od.schedule[0]?.parkedSurplus).toBe(roundMoney(
-      1_000_000 + result.standard.schedule[0]!.interest - result.od.schedule[0]!.interest,
-    ))
+    expect(result.loanAmount).toBe(4_000_000)
+    const firstStandard = result.standard.schedule[0]!
+    const firstOd = result.od.schedule[0]!
+    const reconstructedOpeningSurplus = roundMoney(
+      firstOd.parkedSurplus - firstStandard.interest + firstOd.interest,
+    )
+    expect(reconstructedOpeningSurplus).toBe(1_000_000)
   })
 
   it('ignores populated optional OD data while OD is disabled', () => {
@@ -694,25 +700,28 @@ describe('loan engine', () => {
   })
 
   it.each([
-    { frequency: 'once', count: 1 },
-    { frequency: 'monthly', count: 23 },
-    { frequency: 'quarterly', count: 8 },
-    { frequency: 'yearly', count: 2 },
-  ] as const)('applies $frequency prepayments from cycle one', ({ frequency, count }) => {
+    { frequency: 'once', cycles: [1] },
+    { frequency: 'monthly', cycles: Array.from({ length: 24 }, (_, index) => index + 1) },
+    { frequency: 'quarterly', cycles: [1, 4, 7, 10, 13, 16, 19, 22] },
+    { frequency: 'yearly', cycles: [1, 13] },
+  ] as const)('applies $frequency prepayments on exact cycles', ({ frequency, cycles }) => {
     const startDate = '2026-01-31'
     const result = calculateLoan(scenarioWith({
-      homeValue: 2_400_000,
+      homeValue: 3_600_000,
       downPayment: 0,
       downPaymentMode: 'amount',
       annualRate: 0,
-      tenureMonths: 24,
+      tenureMonths: 36,
       startDate,
       prepayments: [{ id: frequency, date: addMonths(startDate, 1), amount: 1, frequency }],
     }))
 
     expect(result.errors).toEqual([])
-    expect(result.standard.schedule.filter(({ prepayment }) => prepayment > 0)).toHaveLength(count)
-    expect(result.standard.totalPrepayments).toBe(count)
+    const appliedCycles = result.standard.schedule.slice(0, 24)
+      .filter(({ prepayment }) => prepayment > 0)
+      .map(({ month }) => month)
+    expect(appliedCycles).toEqual(cycles)
+    expect(appliedCycles).toHaveLength(cycles.length)
   })
 
   it('pays off in the first cycle when its prepayment covers remaining principal', () => {
