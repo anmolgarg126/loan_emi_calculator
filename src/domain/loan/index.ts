@@ -122,7 +122,13 @@ const DAY_MS = 86_400_000
 const MAX_MONEY = 1_000_000_000
 const MAX_MONTHS = 600
 
-export const roundMoney = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100
+export const roundMoney = (value: number) => {
+  const scaled = value * 100
+  const tolerance = Number.EPSILON * Math.max(1, Math.abs(scaled))
+  return (scaled >= 0
+    ? Math.floor(scaled + 0.5 + tolerance)
+    : Math.ceil(scaled - 0.5 - tolerance)) / 100
+}
 
 export const amountFromMode = (value: number, mode: MoneyMode, base: number) =>
   roundMoney(mode === 'percent' ? (base * value) / 100 : value)
@@ -154,6 +160,17 @@ export const addMonths = (date: string, months: number) => {
   return new Date(Date.UTC(targetYear, normalizedMonth, Math.min(source.getUTCDate(), lastDay)))
     .toISOString()
     .slice(0, 10)
+}
+
+export const cycleIndex = (startDate: string, candidate: string): number | null => {
+  const startDay = toEpochDay(startDate)
+  const candidateDay = toEpochDay(candidate)
+  if (!Number.isFinite(startDay) || !Number.isFinite(candidateDay) || candidateDay < startDay) return null
+  const start = new Date(startDay * DAY_MS)
+  const target = new Date(candidateDay * DAY_MS)
+  const index = (target.getUTCFullYear() - start.getUTCFullYear()) * 12
+    + target.getUTCMonth() - start.getUTCMonth()
+  return index <= MAX_MONTHS && addMonths(startDate, index) === candidate ? index : null
 }
 
 export const calculateEmi = (principal: number, annualRate: number, months: number) => {
@@ -201,31 +218,16 @@ export const defaultScenario = (): LoanScenario => ({
   },
 })
 
-const isCycleDate = (startDate: string, candidate: string, maxMonths = MAX_MONTHS) => {
-  for (let month = 0; month <= maxMonths; month += 1) {
-    if (addMonths(startDate, month) === candidate) return true
-  }
-  return false
-}
+const isCycleDate = (startDate: string, candidate: string) => cycleIndex(startDate, candidate) !== null
 
-const prepaymentDue = (item: Prepayment, paymentDate: string, startDate: string) => {
-  const itemDay = toEpochDay(item.date)
-  const paymentDay = toEpochDay(paymentDate)
-  if (!Number.isFinite(itemDay) || paymentDay < itemDay) return false
-  let itemMonth = -1
-  let paymentMonth = -1
-  for (let month = 1; month <= MAX_MONTHS; month += 1) {
-    const cycle = addMonths(startDate, month)
-    if (cycle === item.date) itemMonth = month
-    if (cycle === paymentDate) paymentMonth = month
-    if (itemMonth >= 0 && paymentMonth >= 0) break
-  }
-  if (itemMonth < 0 || paymentMonth < itemMonth) return false
-  const delta = paymentMonth - itemMonth
-  if (item.frequency === 'once') return delta === 0
-  if (item.frequency === 'monthly') return true
-  if (item.frequency === 'quarterly') return delta % 3 === 0
-  return delta % 12 === 0
+const prepaymentDue = (item: Prepayment, paymentCycle: number, startCycle: number) => {
+  const delta = paymentCycle - startCycle
+  if (delta < 0) return false
+  const interval = item.frequency === 'once' ? 0
+    : item.frequency === 'monthly' ? 1
+      : item.frequency === 'quarterly' ? 3
+        : 12
+  return interval === 0 ? delta === 0 : delta % interval === 0
 }
 
 export const validateScenario = (scenario: LoanScenario) => {
@@ -303,6 +305,9 @@ const buildStandardSchedule = (scenario: LoanScenario, loanAmount: number, month
   const errors: string[] = []
   const schedule: ScheduleRow[] = []
   const changes = new Map(scenario.rateChanges.map((change) => [change.date, change]))
+  const prepayments = scenario.prepayments
+    .map((item) => ({ item, startCycle: cycleIndex(scenario.startDate, item.date) }))
+    .filter((entry): entry is { item: Prepayment, startCycle: number } => entry.startCycle !== null)
   let annualRate = scenario.annualRate
   let balance = loanAmount
   let emi = calculateEmi(balance, annualRate, scenario.tenureMonths)
@@ -332,9 +337,9 @@ const buildStandardSchedule = (scenario: LoanScenario, loanAmount: number, month
       isFinalFixedTenurePayment ? balance : Math.min(balance, Math.max(0, emi - interest)),
     )
     const duePrepayment = roundMoney(
-      scenario.prepayments
-        .filter((item) => prepaymentDue(item, paymentDate, scenario.startDate))
-        .reduce((sum, item) => sum + item.amount, 0),
+      prepayments
+        .filter(({ item, startCycle }) => prepaymentDue(item, month + 1, startCycle))
+        .reduce((sum, { item }) => sum + item.amount, 0),
     )
     const prepayment = roundMoney(Math.min(Math.max(0, balance - principal), duePrepayment))
     balance = roundMoney(Math.max(0, balance - principal - prepayment))

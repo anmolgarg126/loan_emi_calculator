@@ -3,6 +3,7 @@ import {
   addMonths,
   calculateEmi,
   calculateLoan,
+  cycleIndex,
   defaultScenario,
   fromEpochDay,
   roundMoney,
@@ -13,6 +14,24 @@ import {
 const scenarioWith = (patch: Partial<LoanScenario>): LoanScenario => ({ ...defaultScenario(), ...patch })
 
 describe('loan engine', () => {
+  it('rounds fractional paise symmetrically', () => {
+    expect(roundMoney(10.075)).toBe(10.08)
+    expect(roundMoney(-10.075)).toBe(-10.08)
+    expect(roundMoney(1.0049)).toBe(1)
+    expect(roundMoney(1.005)).toBe(1.01)
+  })
+
+  it('finds exact EMI cycle indexes', () => {
+    expect(cycleIndex('2026-01-31', '2026-01-31')).toBe(0)
+    expect(cycleIndex('2026-01-31', '2026-02-28')).toBe(1)
+    expect(cycleIndex('2026-01-31', '2026-03-31')).toBe(2)
+    expect(cycleIndex('2026-01-31', '2026-03-30')).toBeNull()
+    expect(cycleIndex('2026-01-31', '2025-12-31')).toBeNull()
+    expect(cycleIndex('2026-01-31', addMonths('2026-01-31', 601))).toBeNull()
+    expect(cycleIndex('invalid', '2026-01-31')).toBeNull()
+    expect(cycleIndex('2026-01-31', 'invalid')).toBeNull()
+  })
+
   it('matches the standard EMI golden case', () => {
     expect(calculateEmi(4_000_000, 9, 240)).toBe(35_989.04)
     const result = calculateLoan(defaultScenario())
@@ -270,5 +289,27 @@ describe('loan engine', () => {
     const result = calculateLoan(base)
     expect(result.standard.schedule.length).toBeLessThan(base.tenureMonths)
     expect(result.ownershipCostOverOriginalTenure).toBe(result.monthlyOwnershipCost * base.tenureMonths)
+  })
+
+  it('calculates the largest recurring-prepayment schedule promptly', () => {
+    const base = defaultScenario()
+    const scenario = scenarioWith({
+      tenureMonths: 480,
+      prepayments: Array.from({ length: 100 }, (_, index) => ({
+        id: `prepayment-${index}`,
+        date: addMonths(base.startDate, 1 + index * 4),
+        amount: 1,
+        frequency: 'yearly' as const,
+      })),
+    })
+    calculateLoan(scenario)
+
+    const startedAt = performance.now()
+    const result = calculateLoan(scenario)
+    const elapsed = performance.now() - startedAt
+
+    expect(elapsed).toBeLessThan(100)
+    expect(result.errors).toEqual([])
+    expect(result.standard.schedule.at(-1)?.balance).toBe(0)
   })
 })
