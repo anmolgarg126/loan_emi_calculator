@@ -2,7 +2,7 @@
 
 Date: 2026-07-11
 
-Baseline scope: committed application at `5df8c28` plus read-only audit scripts outside the repository. Resolution evidence below covers hardening commits through `a231459`.
+Baseline scope: committed application at `5df8c28` plus read-only audit scripts outside the repository. Resolution evidence below covers hardening commits through `ed64e45`; final completion evidence was measured from the exact tree `ed64e4588448e51a2dd23f88a7404a373505beb3` on 2026-07-12.
 
 ## Executive result
 
@@ -27,6 +27,43 @@ The hardening work resolved every confirmed correctness, performance, accessibil
 | Initial application console/page errors | None |
 
 Local preview timings are regression baselines, not real-user network benchmarks.
+
+## Final completion evidence
+
+The destructive release gate ran from `/tmp/loan-hardening-audit-ed64e45`, created with `git archive HEAD` while the source worktree resolved to `ed64e4588448e51a2dd23f88a7404a373505beb3`. The archive began without `node_modules`, `dist`, `test-results`, or `playwright-report`, so ignored files in the source worktree could not affect the result. Node 24.18.0 for Darwin arm64 was downloaded from the official Node distribution and matched SHA-256 `e1a97e14c99c803e96c7339403282ea05a499c32f8d83defe9ef5ec66f979ed1`; npm 11.16.0 was installed into the same temporary toolchain prefix.
+
+| Command | Result |
+|---|---:|
+| `npm ci --ignore-scripts` | Pass; 282 packages; 0 vulnerabilities |
+| `npm run verify` | Pass; lint, type-check, 82 unit tests, and production build |
+| `npx playwright install chromium firefox webkit` | Pass |
+| `npm run test:e2e` | Pass; 75/75 across desktop Chromium, Firefox, WebKit, Pixel 5 Chromium emulation, and iPhone 13 WebKit emulation |
+| `npm audit --omit=dev` | Pass; 0 vulnerabilities |
+| `git diff --check` | Pass |
+| `VITE_BASE_PATH=/loan_emi_calculator/ VITE_SITE_URL=https://owner.github.io/loan_emi_calculator/ npm run build` | Pass |
+| `VITE_BASE_PATH=/loan_emi_calculator/ VITE_SITE_URL=https://owner.github.io/loan_emi_calculator/ npm run test:e2e` | Pass; 75/75 from the Pages subpath |
+
+### Supported-maximum performance
+
+The benchmark used the committed fixtures in `src/domain/loan/loan.test.ts`: `defaultScenario()`; the maximum supported OD scenario (`₹1,000,000,000`, 0 down payment in amount mode, 50% annual rate, 480 months, `2026-01-01`, OD enabled); and the 480-month scenario with 100 yearly ₹1 recurring prepayments starting at the committed four-month offsets. Under Node 24.18.0, each fixture ran once as an unmeasured warm-up and then 25 times in one process. Each sample wrapped only `calculateLoan(scenario)` with `performance.now()` from `node:perf_hooks`; the median is the 13th sorted sample and the maximum is the largest sample.
+
+| Fixture | Runs | Median | Maximum | Budget |
+|---|---:|---:|---:|---:|
+| Default | 25 | 0.429 ms | 0.665 ms | median <2 ms; every run <100 ms |
+| Maximum OD | 25 | 1.847 ms | 3.511 ms | median <20 ms; every run <100 ms |
+| 100 recurring prepayments | 25 | 1.364 ms | 1.620 ms | median <20 ms; every run <100 ms |
+
+These local single-process timings are regression evidence, not end-user latency measurements.
+
+### Production visual inspection
+
+The exact Pages build was served with Vite preview and inspected in headless Chromium. Full-page screenshots at 1440×900, 375×812, 320×568, and 812×375, plus expanded-OD, invalid-input, two-year-expanded schedule, keyboard-focus, and print-media states, are in the gitignored local directory `test-results/final-audit-ed64e45/`. Every captured screen had `document.documentElement.scrollWidth === clientWidth`, no console or page errors, and exactly two same-origin runtime resources (the built JS and CSS). The default hierarchy remained legible; expanded OD controls and a dated transaction remained contained at 375 px; the 320 px error state connected the inline error and disabled all four stale-result actions; two expanded schedule years mounted two tables without page clipping; and the keyboard skip link showed a solid 3 px orange focus outline.
+
+Print-media emulation hid the header, input panel, status, actions, and footer while retaining the result, charts, all 21 yearly summaries, and the currently expanded first year's four mounted monthly rows. This confirms the committed native print CSS and lazy schedule DOM interaction, not operating-system print-dialog pagination or a saved physical/PDF output. Physical-device, screen-reader, actual print-preview, slow-network, and thermal/battery checks were not available and remain manual residual work.
+
+### Final security review
+
+The `5df8c28..ed64e45` changed source and workflow files were scanned with `rg` for raw HTML insertion, `eval`/dynamic code, remote scripts and runtime network APIs, credentials and secret-like strings, shell/process execution, URL and expression interpolation, and workflow permissions. No exploitable sink, secret, unexpected runtime request, or command interpolation was found. The sole source `.exec` match was the fixed date-validation regular expression. The only committed remote URL is the expected owner/repository-derived Pages URL; those GitHub expressions are not shell commands. All workflow actions use immutable 40-character commit references. The build job retains only `contents: read`; `pages: write` and `id-token: write` exist only on the deploy job, after verified artifact production. Reinspection of the fragment decoder, calculation/validation engine, export boundary, and deployment workflow found the documented TM-001 through TM-005 controls intact and TM-006 unchanged as an accepted low residual risk. A second `npm audit --omit=dev` reported 0 vulnerabilities.
 
 ## Confirmed correctness findings
 
