@@ -508,7 +508,7 @@ const buildOdSchedule = (
 
   let drawingPower = loanAmount
   let parkedSurplus = openingSurplusAmount
-  let totalFees = scenario.od.setupFee
+  let totalFees = 0
   let accruedInterest = 0
   let activeRate = (standardSchedule[0]?.annualRate ?? scenario.annualRate) + scenario.od.premiumRate
   let periodDeposits = 0
@@ -544,7 +544,6 @@ const buildOdSchedule = (
         periodDeposits = roundMoney(periodDeposits + scenario.od.monthlyContribution)
       }
       annualFee = (index + 1) % 12 === 0 && wasOpen ? scenario.od.annualFee : 0
-      totalFees = roundMoney(totalFees + annualFee)
     }
 
     const dayTransactions = transactionsByDay.get(day) ?? []
@@ -573,6 +572,8 @@ const buildOdSchedule = (
 
     if (paymentEvent) {
       const { row, index } = paymentEvent
+      const fee = annualFee + (index === 0 ? scenario.od.setupFee : 0)
+      totalFees = roundMoney(totalFees + fee)
       schedule.push({
         month: index + 1,
         date: row.date,
@@ -583,7 +584,7 @@ const buildOdSchedule = (
         prepayment,
         deposit: periodDeposits,
         withdrawal: periodWithdrawals,
-        fee: annualFee + (index === 0 ? scenario.od.setupFee : 0),
+        fee,
         drawingPower,
         parkedSurplus,
         availableWithdrawal: parkedSurplus,
@@ -598,7 +599,7 @@ const buildOdSchedule = (
   }
 
   const endingNetUtilized = Math.max(0, drawingPower - parkedSurplus)
-  const netDebtFreeDate = endingNetUtilized > 0.005
+  const netDebtFreeDate = errors.length > 0 || endingNetUtilized > 0.005
     ? null
     : lastPositiveDay === null
       ? scenario.startDate

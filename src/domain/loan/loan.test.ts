@@ -256,6 +256,68 @@ describe('loan engine', () => {
     expect(result.errors.some((error) => error.includes('exceeds the available parked surplus'))).toBe(true)
   })
 
+  it('does not report payoff from an invalid withdrawal after a same-day offsetting deposit', () => {
+    const base = defaultScenario()
+    const result = calculateLoan({
+      ...base,
+      od: {
+        ...base.od,
+        enabled: true,
+        transactionsEnabled: true,
+        transactions: [
+          { id: 'offset', date: base.startDate, type: 'deposit', amount: 4_000_000 },
+          { id: 'invalid', date: base.startDate, type: 'withdrawal', amount: 4_000_000.01 },
+        ],
+      },
+    })
+
+    expect(result.errors.some((error) => error.includes('exceeds the available parked surplus'))).toBe(true)
+    expect(result.od.schedule).toEqual([])
+    expect(result.od.netDebtFreeDate).toBeNull()
+    expect(result.od.endingParkedSurplus).toBe(0)
+    expect([
+      result.od.totalInterest,
+      result.od.totalFees,
+      result.od.endingParkedSurplus,
+      result.od.totalModelledOutflow,
+    ].every(Number.isFinite)).toBe(true)
+  })
+
+  it('does not commit an annual fee when that payment-day withdrawal is invalid', () => {
+    const base = defaultScenario()
+    const result = calculateLoan({
+      ...base,
+      tenureMonths: 24,
+      od: {
+        ...base.od,
+        enabled: true,
+        setupFee: 2_000,
+        annualFee: 500,
+        transactionsEnabled: true,
+        transactions: [{
+          id: 'invalid-anniversary',
+          date: addMonths(base.startDate, 12),
+          type: 'withdrawal',
+          amount: 1_000_000,
+        }],
+      },
+    })
+    const committedFees = result.od.schedule.reduce((sum, row) => sum + row.fee, 0)
+
+    expect(result.errors.some((error) => error.includes('exceeds the available parked surplus'))).toBe(true)
+    expect(result.od.schedule).toHaveLength(11)
+    expect(result.od.totalFees).toBe(committedFees)
+    expect(result.od.totalFees).toBe(2_000)
+    expect(result.od.netDebtFreeDate).toBeNull()
+    expect(result.od.endingParkedSurplus).toBe(result.od.schedule.at(-1)?.parkedSurplus)
+    expect([
+      result.od.totalInterest,
+      result.od.totalFees,
+      result.od.endingParkedSurplus,
+      result.od.totalModelledOutflow,
+    ].every(Number.isFinite)).toBe(true)
+  })
+
   it('caps transactions and warns when parked surplus exceeds drawing power', () => {
     const base = defaultScenario()
     const transactions = Array.from({ length: 101 }, (_, index) => ({
