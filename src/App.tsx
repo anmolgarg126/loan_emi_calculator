@@ -25,6 +25,7 @@ function NumberField({
   max,
   step = 'any',
   hint,
+  error,
 }: {
   id: string
   label: string
@@ -36,7 +37,9 @@ function NumberField({
   max?: number
   step?: number | 'any'
   hint?: string
+  error?: string
 }) {
+  const describedBy = [hint && `${id}-hint`, error && `${id}-error`].filter(Boolean).join(' ') || undefined
   return (
     <label className="field" htmlFor={id}>
       <span className="field-label">{label}</span>
@@ -50,23 +53,40 @@ function NumberField({
           min={min}
           max={max}
           step={step}
+          aria-describedby={describedBy}
+          aria-invalid={Boolean(error)}
           onChange={(event) => onChange(event.target.value === '' ? 0 : Number(event.target.value))}
         />
         {suffix && <span className="input-affix">{suffix}</span>}
       </span>
-      {hint && <small>{hint}</small>}
+      {hint && <small id={`${id}-hint`}>{hint}</small>}
+      {error && <small id={`${id}-error`} className="field-error">{error}</small>}
     </label>
   )
 }
 
-function DateField({ id, label, value, onChange, hint }: { id: string; label: string; value: string; onChange: (value: string) => void; hint?: string }) {
+function DateField({ id, label, value, onChange, hint, error }: { id: string; label: string; value: string; onChange: (value: string) => void; hint?: string; error?: string }) {
+  const describedBy = [hint && `${id}-hint`, error && `${id}-error`].filter(Boolean).join(' ') || undefined
   return (
     <label className="field" htmlFor={id}>
       <span className="field-label">{label}</span>
       <span className="input-shell">
-        <input id={id} type="date" value={value} onChange={(event) => onChange(event.target.value)} />
+        <input id={id} type="date" value={value} aria-describedby={describedBy} aria-invalid={Boolean(error)} onChange={(event) => onChange(event.target.value)} />
       </span>
-      {hint && <small>{hint}</small>}
+      {hint && <small id={`${id}-hint`}>{hint}</small>}
+      {error && <small id={`${id}-error`} className="field-error">{error}</small>}
+    </label>
+  )
+}
+
+function SelectField({ id, label, value, onChange, error, children }: { id: string; label: string; value: string; onChange: (value: string) => void; error?: string; children: ReactNode }) {
+  return (
+    <label className="field" htmlFor={id}>
+      <span className="field-label">{label}</span>
+      <span className="input-shell">
+        <select id={id} value={value} aria-describedby={error ? `${id}-error` : undefined} aria-invalid={Boolean(error)} onChange={(event) => onChange(event.target.value)}>{children}</select>
+      </span>
+      {error && <small id={`${id}-error`} className="field-error">{error}</small>}
     </label>
   )
 }
@@ -118,12 +138,13 @@ function App() {
   const sharedScenario = useMemo(() => decodeScenario(window.location.hash), [])
   const [model, setModel] = useState(() => {
     const scenario = sharedScenario ?? defaultScenario()
-    return { scenario, lastValidResult: calculateLoan(scenario) }
+    const currentResult = calculateLoan(scenario)
+    return { scenario, currentResult, lastValidResult: currentResult, shared: Boolean(sharedScenario) }
   })
   const scenario = model.scenario
   const [status, setStatus] = useState(() => window.location.hash && !sharedScenario ? 'The shared scenario link was invalid and has been ignored.' : '')
   const [exporting, setExporting] = useState(false)
-  const calculatedResult = useMemo(() => calculateLoan(scenario), [scenario])
+  const calculatedResult = model.currentResult
   const result = calculatedResult.errors.length === 0 ? calculatedResult : model.lastValidResult
 
   useEffect(() => {
@@ -132,17 +153,21 @@ function App() {
     canonical.href = import.meta.env.VITE_SITE_URL || new URL(import.meta.env.BASE_URL, window.location.origin).toString()
   }, [])
 
-  const setNextScenario = (nextScenario: LoanScenario) => setModel((current) => {
+  const setNextScenario = (nextScenario: LoanScenario, shared = false) => setModel((current) => {
     const nextResult = calculateLoan(nextScenario)
     return {
       scenario: nextScenario,
+      currentResult: nextResult,
       lastValidResult: nextResult.errors.length === 0 ? nextResult : current.lastValidResult,
+      shared,
     }
   })
   const update = <K extends keyof LoanScenario>(key: K, value: LoanScenario[K]) =>
     setNextScenario({ ...scenario, [key]: value })
   const updateOd = <K extends keyof LoanScenario['od']>(key: K, value: LoanScenario['od'][K]) =>
     setNextScenario({ ...scenario, od: { ...scenario.od, [key]: value } })
+  const issueFor = (field: string) => calculatedResult.issues.find((issue) => issue.field === field)?.message
+  const actionsDisabled = calculatedResult.errors.length > 0
 
   const share = async () => {
     try {
@@ -206,28 +231,29 @@ function App() {
                 <div className="section-kicker">INPUT LEDGER</div>
                 <h2 id="inputs-title">Build your scenario</h2>
               </div>
-              <button type="button" className="text-button" onClick={() => { const reset = defaultScenario(); setModel({ scenario: reset, lastValidResult: calculateLoan(reset) }); setStatus('Scenario reset.') }}>Reset</button>
+              <button type="button" className="text-button" onClick={() => { setNextScenario(defaultScenario()); setStatus('Scenario reset.') }}>Reset</button>
             </div>
 
             <div className="form-section always-open">
               <div className="section-body">
                 <div className="field-grid">
-                  <NumberField id="home-value" label="Home value" value={scenario.homeValue} onChange={(value) => update('homeValue', value)} prefix="₹" />
+                  <NumberField id="home-value" label="Home value" value={scenario.homeValue} onChange={(value) => update('homeValue', value)} prefix="₹" error={issueFor('homeValue')} />
                   <div className="field-with-mode">
-                    <NumberField id="down-payment" label="Down payment" value={scenario.downPayment} onChange={(value) => update('downPayment', value)} suffix={scenario.downPaymentMode === 'percent' ? '%' : undefined} prefix={scenario.downPaymentMode === 'amount' ? '₹' : undefined} />
+                    <NumberField id="down-payment" label="Down payment" value={scenario.downPayment} onChange={(value) => update('downPayment', value)} suffix={scenario.downPaymentMode === 'percent' ? '%' : undefined} prefix={scenario.downPaymentMode === 'amount' ? '₹' : undefined} error={issueFor('downPayment')} />
                     <ModeToggle value={scenario.downPaymentMode} onChange={(value) => update('downPaymentMode', value)} percentLabel="% home" />
                   </div>
-                  <NumberField id="loan-insurance" label="Financed loan insurance" value={scenario.loanInsurance} onChange={(value) => update('loanInsurance', value)} prefix="₹" />
+                  <NumberField id="loan-insurance" label="Financed loan insurance" value={scenario.loanInsurance} onChange={(value) => update('loanInsurance', value)} prefix="₹" error={issueFor('loanInsurance')} />
                   <label className="field" htmlFor="loan-amount">
                     <span className="field-label">Calculated loan amount</span>
-                    <span className="input-shell read-only"><span className="input-affix">₹</span><input id="loan-amount" value={Math.round(result.loanAmount)} readOnly /></span>
-                    <small>Home value + financed insurance − down payment</small>
+                    <span className="input-shell read-only"><span className="input-affix">₹</span><input id="loan-amount" value={Math.round(result.loanAmount)} aria-describedby={`loan-amount-hint${issueFor('loanAmount') ? ' loan-amount-error' : ''}`} aria-invalid={Boolean(issueFor('loanAmount'))} readOnly /></span>
+                    <small id="loan-amount-hint">Home value + financed insurance − down payment</small>
+                    {issueFor('loanAmount') && <small id="loan-amount-error" className="field-error">{issueFor('loanAmount')}</small>}
                   </label>
-                  <NumberField id="interest-rate" label="Annual interest rate" value={scenario.annualRate} onChange={(value) => update('annualRate', value)} suffix="%" max={50} step={0.01} />
-                  <NumberField id="tenure" label="Loan tenure" value={scenario.tenureMonths} onChange={(value) => update('tenureMonths', Math.round(value))} suffix="months" max={480} step={1} />
-                  <DateField id="start-date" label="Loan / EMI cycle start" value={scenario.startDate} onChange={(value) => update('startDate', value)} hint="First payment is one month after this date." />
+                  <NumberField id="interest-rate" label="Annual interest rate" value={scenario.annualRate} onChange={(value) => update('annualRate', value)} suffix="%" max={50} step={0.01} error={issueFor('annualRate')} />
+                  <NumberField id="tenure" label="Loan tenure" value={scenario.tenureMonths} onChange={(value) => update('tenureMonths', Math.round(value))} suffix="months" max={480} step={1} error={issueFor('tenureMonths')} />
+                  <DateField id="start-date" label="Loan / EMI cycle start" value={scenario.startDate} onChange={(value) => update('startDate', value)} hint="First payment is one month after this date." error={issueFor('startDate')} />
                   <div className="field-with-mode">
-                    <NumberField id="processing-fee" label="Processing fee" value={scenario.processingFee} onChange={(value) => update('processingFee', value)} suffix={scenario.processingFeeMode === 'percent' ? '%' : undefined} prefix={scenario.processingFeeMode === 'amount' ? '₹' : undefined} />
+                    <NumberField id="processing-fee" label="Processing fee" value={scenario.processingFee} onChange={(value) => update('processingFee', value)} suffix={scenario.processingFeeMode === 'percent' ? '%' : undefined} prefix={scenario.processingFeeMode === 'amount' ? '₹' : undefined} error={issueFor('processingFee')} />
                     <ModeToggle value={scenario.processingFeeMode} onChange={(value) => update('processingFeeMode', value)} percentLabel="% loan" />
                   </div>
                 </div>
@@ -237,18 +263,18 @@ function App() {
             <Section title="Homeowner costs" eyebrow="OPTIONAL / OWNERSHIP">
               <div className="field-grid">
                 <div className="field-with-mode">
-                  <NumberField id="one-time" label="One-time expenses" value={scenario.oneTimeExpenses} onChange={(value) => update('oneTimeExpenses', value)} suffix={scenario.oneTimeExpensesMode === 'percent' ? '%' : undefined} prefix={scenario.oneTimeExpensesMode === 'amount' ? '₹' : undefined} />
+                  <NumberField id="one-time" label="One-time expenses" value={scenario.oneTimeExpenses} onChange={(value) => update('oneTimeExpenses', value)} suffix={scenario.oneTimeExpensesMode === 'percent' ? '%' : undefined} prefix={scenario.oneTimeExpensesMode === 'amount' ? '₹' : undefined} error={issueFor('oneTimeExpenses')} />
                   <ModeToggle value={scenario.oneTimeExpensesMode} onChange={(value) => update('oneTimeExpensesMode', value)} percentLabel="% home" />
                 </div>
                 <div className="field-with-mode">
-                  <NumberField id="property-tax" label="Property tax / year" value={scenario.propertyTaxAnnual} onChange={(value) => update('propertyTaxAnnual', value)} suffix={scenario.propertyTaxMode === 'percent' ? '%' : undefined} prefix={scenario.propertyTaxMode === 'amount' ? '₹' : undefined} />
+                  <NumberField id="property-tax" label="Property tax / year" value={scenario.propertyTaxAnnual} onChange={(value) => update('propertyTaxAnnual', value)} suffix={scenario.propertyTaxMode === 'percent' ? '%' : undefined} prefix={scenario.propertyTaxMode === 'amount' ? '₹' : undefined} error={issueFor('propertyTaxAnnual')} />
                   <ModeToggle value={scenario.propertyTaxMode} onChange={(value) => update('propertyTaxMode', value)} percentLabel="% home" />
                 </div>
                 <div className="field-with-mode">
-                  <NumberField id="home-insurance" label="Home insurance / year" value={scenario.homeInsuranceAnnual} onChange={(value) => update('homeInsuranceAnnual', value)} suffix={scenario.homeInsuranceMode === 'percent' ? '%' : undefined} prefix={scenario.homeInsuranceMode === 'amount' ? '₹' : undefined} />
+                  <NumberField id="home-insurance" label="Home insurance / year" value={scenario.homeInsuranceAnnual} onChange={(value) => update('homeInsuranceAnnual', value)} suffix={scenario.homeInsuranceMode === 'percent' ? '%' : undefined} prefix={scenario.homeInsuranceMode === 'amount' ? '₹' : undefined} error={issueFor('homeInsuranceAnnual')} />
                   <ModeToggle value={scenario.homeInsuranceMode} onChange={(value) => update('homeInsuranceMode', value)} percentLabel="% home" />
                 </div>
-                <NumberField id="maintenance" label="Maintenance / month" value={scenario.maintenanceMonthly} onChange={(value) => update('maintenanceMonthly', value)} prefix="₹" />
+                <NumberField id="maintenance" label="Maintenance / month" value={scenario.maintenanceMonthly} onChange={(value) => update('maintenanceMonthly', value)} prefix="₹" error={issueFor('maintenanceMonthly')} />
               </div>
               <p className="inline-note">Ownership costs are kept constant and compared over the original contracted tenure. They never inflate OD savings.</p>
             </Section>
@@ -258,12 +284,11 @@ function App() {
               <div className="entry-list">
                 {scenario.prepayments.map((item, index) => (
                   <div className="entry-row" key={item.id}>
-                    <DateField id={`prepayment-date-${item.id}`} label="First date" value={item.date} onChange={(date) => update('prepayments', scenario.prepayments.map((current) => current.id === item.id ? { ...current, date } : current))} />
-                    <NumberField id={`prepayment-amount-${item.id}`} label="Amount" value={item.amount} onChange={(amount) => update('prepayments', scenario.prepayments.map((current) => current.id === item.id ? { ...current, amount } : current))} prefix="₹" />
-                    <label className="field" htmlFor={`prepayment-frequency-${item.id}`}>
-                      <span className="field-label">Frequency</span>
-                      <span className="input-shell"><select id={`prepayment-frequency-${item.id}`} value={item.frequency} onChange={(event) => update('prepayments', scenario.prepayments.map((current) => current.id === item.id ? { ...current, frequency: event.target.value as typeof item.frequency } : current))}><option value="once">One-time</option><option value="monthly">Monthly</option><option value="quarterly">Quarterly</option><option value="yearly">Yearly</option></select></span>
-                    </label>
+                    <DateField id={`prepayment-date-${item.id}`} label="First date" value={item.date} onChange={(date) => update('prepayments', scenario.prepayments.map((current) => current.id === item.id ? { ...current, date } : current))} error={issueFor(`prepayments.${item.id}.date`)} />
+                    <NumberField id={`prepayment-amount-${item.id}`} label="Amount" value={item.amount} onChange={(amount) => update('prepayments', scenario.prepayments.map((current) => current.id === item.id ? { ...current, amount } : current))} prefix="₹" error={issueFor(`prepayments.${item.id}.amount`)} />
+                    <SelectField id={`prepayment-frequency-${item.id}`} label="Frequency" value={item.frequency} error={issueFor(`prepayments.${item.id}.frequency`)} onChange={(frequency) => update('prepayments', scenario.prepayments.map((current) => current.id === item.id ? { ...current, frequency: frequency as typeof item.frequency } : current))}>
+                      <option value="once">One-time</option><option value="monthly">Monthly</option><option value="quarterly">Quarterly</option><option value="yearly">Yearly</option>
+                    </SelectField>
                     <button type="button" className="remove-button" onClick={() => update('prepayments', scenario.prepayments.filter((current) => current.id !== item.id))} aria-label={`Remove prepayment ${index + 1}`}>Remove</button>
                   </div>
                 ))}
@@ -276,12 +301,11 @@ function App() {
               <div className="entry-list">
                 {scenario.rateChanges.map((item, index) => (
                   <div className="entry-row" key={item.id}>
-                    <DateField id={`rate-date-${item.id}`} label="Effective date" value={item.date} onChange={(date) => update('rateChanges', scenario.rateChanges.map((current) => current.id === item.id ? { ...current, date } : current))} />
-                    <NumberField id={`rate-value-${item.id}`} label="New annual rate" value={item.annualRate} onChange={(annualRate) => update('rateChanges', scenario.rateChanges.map((current) => current.id === item.id ? { ...current, annualRate } : current))} suffix="%" max={50} step={0.01} />
-                    <label className="field" htmlFor={`rate-mode-${item.id}`}>
-                      <span className="field-label">Adjustment</span>
-                      <span className="input-shell"><select id={`rate-mode-${item.id}`} value={item.mode} onChange={(event) => update('rateChanges', scenario.rateChanges.map((current) => current.id === item.id ? { ...current, mode: event.target.value as typeof item.mode } : current))}><option value="keep-emi">Keep EMI, adjust tenure</option><option value="keep-tenure">Keep tenure, recalculate EMI</option></select></span>
-                    </label>
+                    <DateField id={`rate-date-${item.id}`} label="Effective date" value={item.date} onChange={(date) => update('rateChanges', scenario.rateChanges.map((current) => current.id === item.id ? { ...current, date } : current))} error={issueFor(`rateChanges.${item.id}.date`)} />
+                    <NumberField id={`rate-value-${item.id}`} label="New annual rate" value={item.annualRate} onChange={(annualRate) => update('rateChanges', scenario.rateChanges.map((current) => current.id === item.id ? { ...current, annualRate } : current))} suffix="%" max={50} step={0.01} error={issueFor(`rateChanges.${item.id}.annualRate`)} />
+                    <SelectField id={`rate-mode-${item.id}`} label="Adjustment" value={item.mode} error={issueFor(`rateChanges.${item.id}.mode`)} onChange={(mode) => update('rateChanges', scenario.rateChanges.map((current) => current.id === item.id ? { ...current, mode: mode as typeof item.mode } : current))}>
+                      <option value="keep-emi">Keep EMI, adjust tenure</option><option value="keep-tenure">Keep tenure, recalculate EMI</option>
+                    </SelectField>
                     <button type="button" className="remove-button" onClick={() => update('rateChanges', scenario.rateChanges.filter((current) => current.id !== item.id))} aria-label={`Remove rate change ${index + 1}`}>Remove</button>
                   </div>
                 ))}
@@ -294,26 +318,25 @@ function App() {
               {scenario.od.enabled && (
                 <div className="od-fields">
                   <div className="field-grid">
-                    <NumberField id="od-premium" label="OD rate premium" value={scenario.od.premiumRate} onChange={(value) => updateOd('premiumRate', value)} suffix="%" max={20} step={0.01} hint={`Effective initial OD rate: ${(scenario.annualRate + scenario.od.premiumRate).toFixed(2)}%`} />
-                    <NumberField id="od-setup-fee" label="One-time OD setup fee" value={scenario.od.setupFee} onChange={(value) => updateOd('setupFee', value)} prefix="₹" />
-                    <NumberField id="od-annual-fee" label="Annual OD account fee" value={scenario.od.annualFee} onChange={(value) => updateOd('annualFee', value)} prefix="₹" />
+                    <NumberField id="od-premium" label="OD rate premium" value={scenario.od.premiumRate} onChange={(value) => updateOd('premiumRate', value)} suffix="%" max={20} step={0.01} hint={`Effective initial OD rate: ${(scenario.annualRate + scenario.od.premiumRate).toFixed(2)}%`} error={issueFor('od.premiumRate')} />
+                    <NumberField id="od-setup-fee" label="One-time OD setup fee" value={scenario.od.setupFee} onChange={(value) => updateOd('setupFee', value)} prefix="₹" error={issueFor('od.setupFee')} />
+                    <NumberField id="od-annual-fee" label="Annual OD account fee" value={scenario.od.annualFee} onChange={(value) => updateOd('annualFee', value)} prefix="₹" error={issueFor('od.annualFee')} />
                     <div className="field-with-mode">
-                      <NumberField id="opening-surplus" label="Opening parked surplus" value={scenario.od.openingSurplus} onChange={(value) => updateOd('openingSurplus', value)} suffix={scenario.od.openingSurplusMode === 'percent' ? '%' : undefined} prefix={scenario.od.openingSurplusMode === 'amount' ? '₹' : undefined} />
+                      <NumberField id="opening-surplus" label="Opening parked surplus" value={scenario.od.openingSurplus} onChange={(value) => updateOd('openingSurplus', value)} suffix={scenario.od.openingSurplusMode === 'percent' ? '%' : undefined} prefix={scenario.od.openingSurplusMode === 'amount' ? '₹' : undefined} error={issueFor('od.openingSurplus')} />
                       <ModeToggle value={scenario.od.openingSurplusMode} onChange={(value) => updateOd('openingSurplusMode', value)} percentLabel="% loan" />
                     </div>
-                    <NumberField id="monthly-surplus" label="Monthly parked contribution" value={scenario.od.monthlyContribution} onChange={(value) => updateOd('monthlyContribution', value)} prefix="₹" hint="Deposited on each EMI date after the scheduled transfer." />
+                    <NumberField id="monthly-surplus" label="Monthly parked contribution" value={scenario.od.monthlyContribution} onChange={(value) => updateOd('monthlyContribution', value)} prefix="₹" hint="Deposited on each EMI date after the scheduled transfer." error={issueFor('od.monthlyContribution')} />
                   </div>
                   <Switch id="od-transactions" checked={scenario.od.transactionsEnabled} onChange={(checked) => updateOd('transactionsEnabled', checked)} label="Dated deposits and withdrawals" description="Optional and off by default. Up to 100 calendar-dated entries." />
                   {scenario.od.transactionsEnabled && (
                     <div className="entry-list od-entries">
                       {scenario.od.transactions.map((item, index) => (
                         <div className="entry-row transaction-row" key={item.id}>
-                          <DateField id={`transaction-date-${item.id}`} label="Date" value={item.date} onChange={(date) => updateOd('transactions', scenario.od.transactions.map((current) => current.id === item.id ? { ...current, date } : current))} />
-                          <label className="field" htmlFor={`transaction-type-${item.id}`}>
-                            <span className="field-label">Type</span>
-                            <span className="input-shell"><select id={`transaction-type-${item.id}`} value={item.type} onChange={(event) => updateOd('transactions', scenario.od.transactions.map((current) => current.id === item.id ? { ...current, type: event.target.value as typeof item.type } : current))}><option value="deposit">Deposit</option><option value="withdrawal">Withdrawal</option></select></span>
-                          </label>
-                          <NumberField id={`transaction-amount-${item.id}`} label="Amount" value={item.amount} onChange={(amount) => updateOd('transactions', scenario.od.transactions.map((current) => current.id === item.id ? { ...current, amount } : current))} prefix="₹" />
+                          <DateField id={`transaction-date-${item.id}`} label="Date" value={item.date} onChange={(date) => updateOd('transactions', scenario.od.transactions.map((current) => current.id === item.id ? { ...current, date } : current))} error={issueFor(`od.transactions.${item.id}.date`)} />
+                          <SelectField id={`transaction-type-${item.id}`} label="Type" value={item.type} error={issueFor(`od.transactions.${item.id}.type`)} onChange={(type) => updateOd('transactions', scenario.od.transactions.map((current) => current.id === item.id ? { ...current, type: type as typeof item.type } : current))}>
+                            <option value="deposit">Deposit</option><option value="withdrawal">Withdrawal</option>
+                          </SelectField>
+                          <NumberField id={`transaction-amount-${item.id}`} label="Amount" value={item.amount} onChange={(amount) => updateOd('transactions', scenario.od.transactions.map((current) => current.id === item.id ? { ...current, amount } : current))} prefix="₹" error={issueFor(`od.transactions.${item.id}.amount`)} />
                           <button type="button" className="remove-button" onClick={() => updateOd('transactions', scenario.od.transactions.filter((current) => current.id !== item.id))} aria-label={`Remove OD transaction ${index + 1}`}>Remove</button>
                         </div>
                       ))}
@@ -329,6 +352,11 @@ function App() {
             <div className="results-sticky">
               <div className="section-kicker">LIVE RESULT</div>
               <h2 id="results-title">The monthly number</h2>
+              {model.shared && (
+                <aside className="shared-notice" role="status">
+                  Loaded from a shared link—verify every input. Anyone with this URL can read its financial values.
+                </aside>
+              )}
               <div className="primary-number">
                 <span>STANDARD EMI</span>
                 <strong>{formatCurrency(result.standard.initialEmi)}</strong>
@@ -376,10 +404,10 @@ function App() {
               )}
 
               <div className="action-grid">
-                <button type="button" onClick={share} disabled={calculatedResult.errors.length > 0}>Copy share link</button>
-                <button type="button" onClick={() => window.print()}>Print / Save PDF</button>
-                <button type="button" onClick={() => downloadCsv(result)} disabled={calculatedResult.errors.length > 0}>Download CSV</button>
-                <button type="button" onClick={exportExcel} disabled={exporting || calculatedResult.errors.length > 0}>{exporting ? 'Preparing…' : 'Download Excel'}</button>
+                <button type="button" onClick={share} disabled={actionsDisabled}>Copy share link</button>
+                <button type="button" onClick={() => window.print()} disabled={actionsDisabled}>Print / Save PDF</button>
+                <button type="button" onClick={() => downloadCsv(result)} disabled={actionsDisabled}>Download CSV</button>
+                <button type="button" onClick={exportExcel} disabled={exporting || actionsDisabled}>{exporting ? 'Preparing…' : 'Download Excel'}</button>
               </div>
               <p className="status" aria-live="polite">{status}</p>
             </div>

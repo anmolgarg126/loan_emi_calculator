@@ -190,6 +190,8 @@ h3 { margin: 8px 0 0; font-family: Iowan Old Style, Baskerville, Georgia, serif;
 .field { display: grid; gap: 7px; }
 .field-label { font-size: 12px; font-weight: 750; color: #383d37; }
 .field small { min-height: 1.2em; font-size: 10px; line-height: 1.35; color: var(--muted); }
+.field .field-error { color: var(--danger); font-weight: 700; }
+.field:has([aria-invalid="true"]) .input-shell { border-color: var(--danger); }
 .input-shell {
   min-height: 48px;
   display: flex;
@@ -254,6 +256,7 @@ dd { margin: 0; font-weight: 750; text-align: right; }
 .action-grid button:first-child { background: var(--ink); color: white; }
 .action-grid button:disabled { opacity: .4; cursor: not-allowed; }
 .status { min-height: 1.5em; color: var(--muted); font-size: 11px; line-height: 1.45; }
+.shared-notice { margin: 20px 0; padding: 14px; border-left: 4px solid var(--orange); background: #eee6bd; font-size: 12px; line-height: 1.5; }
 
 .totals-band { display: grid; grid-template-columns: repeat(3, 1fr); border-bottom: 1px solid var(--ink); }
 .totals-band > div { padding: 34px clamp(20px, 4vw, 56px); border-right: 1px solid var(--ink); }
