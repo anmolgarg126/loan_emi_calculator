@@ -91,16 +91,22 @@ function SelectField({ id, label, value, onChange, error, children }: { id: stri
   )
 }
 
-function ModeToggle({ value, onChange, percentLabel = '% of base' }: { value: MoneyMode; onChange: (value: MoneyMode) => void; percentLabel?: string }) {
+function ModeToggle({ id, value, onChange, percentLabel = '% of base', hint, error }: { id: string; value: MoneyMode; onChange: (value: MoneyMode) => void; percentLabel?: string; hint?: string; error?: string }) {
+  const describedBy = [hint && `${id}-hint`, error && `${id}-error`].filter(Boolean).join(' ') || undefined
   return (
-    <span className="segmented" aria-label="Entry unit">
-      <button type="button" className={value === 'amount' ? 'active' : ''} onClick={() => onChange('amount')} aria-pressed={value === 'amount'}>
-        ₹
-      </button>
-      <button type="button" className={value === 'percent' ? 'active' : ''} onClick={() => onChange('percent')} aria-pressed={value === 'percent'}>
-        {percentLabel}
-      </button>
-    </span>
+    <fieldset id={id} className="mode-field" aria-describedby={describedBy} aria-invalid={Boolean(error)}>
+      <legend>Entry unit</legend>
+      <span className="segmented">
+        <button type="button" className={value === 'amount' ? 'active' : ''} onClick={() => onChange('amount')} aria-pressed={value === 'amount'}>
+          ₹
+        </button>
+        <button type="button" className={value === 'percent' ? 'active' : ''} onClick={() => onChange('percent')} aria-pressed={value === 'percent'}>
+          {percentLabel}
+        </button>
+      </span>
+      {hint && <small id={`${id}-hint`}>{hint}</small>}
+      {error && <small id={`${id}-error`} className="field-error">{error}</small>}
+    </fieldset>
   )
 }
 
@@ -153,15 +159,15 @@ function App() {
     canonical.href = import.meta.env.VITE_SITE_URL || new URL(import.meta.env.BASE_URL, window.location.origin).toString()
   }, [])
 
-  const setNextScenario = (nextScenario: LoanScenario, shared = false) => setModel((current) => {
+  const setNextScenario = (nextScenario: LoanScenario, shared = false) => {
     const nextResult = calculateLoan(nextScenario)
-    return {
+    setModel((current) => ({
       scenario: nextScenario,
       currentResult: nextResult,
       lastValidResult: nextResult.errors.length === 0 ? nextResult : current.lastValidResult,
       shared,
-    }
-  })
+    }))
+  }
   const update = <K extends keyof LoanScenario>(key: K, value: LoanScenario[K]) =>
     setNextScenario({ ...scenario, [key]: value })
   const updateOd = <K extends keyof LoanScenario['od']>(key: K, value: LoanScenario['od'][K]) =>
@@ -240,7 +246,7 @@ function App() {
                   <NumberField id="home-value" label="Home value" value={scenario.homeValue} onChange={(value) => update('homeValue', value)} prefix="₹" error={issueFor('homeValue')} />
                   <div className="field-with-mode">
                     <NumberField id="down-payment" label="Down payment" value={scenario.downPayment} onChange={(value) => update('downPayment', value)} suffix={scenario.downPaymentMode === 'percent' ? '%' : undefined} prefix={scenario.downPaymentMode === 'amount' ? '₹' : undefined} error={issueFor('downPayment')} />
-                    <ModeToggle value={scenario.downPaymentMode} onChange={(value) => update('downPaymentMode', value)} percentLabel="% home" />
+                    <ModeToggle id="down-payment-mode" value={scenario.downPaymentMode} onChange={(value) => update('downPaymentMode', value)} percentLabel="% home" error={issueFor('downPaymentMode')} />
                   </div>
                   <NumberField id="loan-insurance" label="Financed loan insurance" value={scenario.loanInsurance} onChange={(value) => update('loanInsurance', value)} prefix="₹" error={issueFor('loanInsurance')} />
                   <label className="field" htmlFor="loan-amount">
@@ -254,7 +260,7 @@ function App() {
                   <DateField id="start-date" label="Loan / EMI cycle start" value={scenario.startDate} onChange={(value) => update('startDate', value)} hint="First payment is one month after this date." error={issueFor('startDate')} />
                   <div className="field-with-mode">
                     <NumberField id="processing-fee" label="Processing fee" value={scenario.processingFee} onChange={(value) => update('processingFee', value)} suffix={scenario.processingFeeMode === 'percent' ? '%' : undefined} prefix={scenario.processingFeeMode === 'amount' ? '₹' : undefined} error={issueFor('processingFee')} />
-                    <ModeToggle value={scenario.processingFeeMode} onChange={(value) => update('processingFeeMode', value)} percentLabel="% loan" />
+                    <ModeToggle id="processing-fee-mode" value={scenario.processingFeeMode} onChange={(value) => update('processingFeeMode', value)} percentLabel="% loan" error={issueFor('processingFeeMode')} />
                   </div>
                 </div>
               </div>
@@ -264,15 +270,15 @@ function App() {
               <div className="field-grid">
                 <div className="field-with-mode">
                   <NumberField id="one-time" label="One-time expenses" value={scenario.oneTimeExpenses} onChange={(value) => update('oneTimeExpenses', value)} suffix={scenario.oneTimeExpensesMode === 'percent' ? '%' : undefined} prefix={scenario.oneTimeExpensesMode === 'amount' ? '₹' : undefined} error={issueFor('oneTimeExpenses')} />
-                  <ModeToggle value={scenario.oneTimeExpensesMode} onChange={(value) => update('oneTimeExpensesMode', value)} percentLabel="% home" />
+                  <ModeToggle id="one-time-mode" value={scenario.oneTimeExpensesMode} onChange={(value) => update('oneTimeExpensesMode', value)} percentLabel="% home" error={issueFor('oneTimeExpensesMode')} />
                 </div>
                 <div className="field-with-mode">
                   <NumberField id="property-tax" label="Property tax / year" value={scenario.propertyTaxAnnual} onChange={(value) => update('propertyTaxAnnual', value)} suffix={scenario.propertyTaxMode === 'percent' ? '%' : undefined} prefix={scenario.propertyTaxMode === 'amount' ? '₹' : undefined} error={issueFor('propertyTaxAnnual')} />
-                  <ModeToggle value={scenario.propertyTaxMode} onChange={(value) => update('propertyTaxMode', value)} percentLabel="% home" />
+                  <ModeToggle id="property-tax-mode" value={scenario.propertyTaxMode} onChange={(value) => update('propertyTaxMode', value)} percentLabel="% home" error={issueFor('propertyTaxMode')} />
                 </div>
                 <div className="field-with-mode">
                   <NumberField id="home-insurance" label="Home insurance / year" value={scenario.homeInsuranceAnnual} onChange={(value) => update('homeInsuranceAnnual', value)} suffix={scenario.homeInsuranceMode === 'percent' ? '%' : undefined} prefix={scenario.homeInsuranceMode === 'amount' ? '₹' : undefined} error={issueFor('homeInsuranceAnnual')} />
-                  <ModeToggle value={scenario.homeInsuranceMode} onChange={(value) => update('homeInsuranceMode', value)} percentLabel="% home" />
+                  <ModeToggle id="home-insurance-mode" value={scenario.homeInsuranceMode} onChange={(value) => update('homeInsuranceMode', value)} percentLabel="% home" error={issueFor('homeInsuranceMode')} />
                 </div>
                 <NumberField id="maintenance" label="Maintenance / month" value={scenario.maintenanceMonthly} onChange={(value) => update('maintenanceMonthly', value)} prefix="₹" error={issueFor('maintenanceMonthly')} />
               </div>
@@ -323,7 +329,7 @@ function App() {
                     <NumberField id="od-annual-fee" label="Annual OD account fee" value={scenario.od.annualFee} onChange={(value) => updateOd('annualFee', value)} prefix="₹" error={issueFor('od.annualFee')} />
                     <div className="field-with-mode">
                       <NumberField id="opening-surplus" label="Opening parked surplus" value={scenario.od.openingSurplus} onChange={(value) => updateOd('openingSurplus', value)} suffix={scenario.od.openingSurplusMode === 'percent' ? '%' : undefined} prefix={scenario.od.openingSurplusMode === 'amount' ? '₹' : undefined} error={issueFor('od.openingSurplus')} />
-                      <ModeToggle value={scenario.od.openingSurplusMode} onChange={(value) => updateOd('openingSurplusMode', value)} percentLabel="% loan" />
+                      <ModeToggle id="opening-surplus-mode" value={scenario.od.openingSurplusMode} onChange={(value) => updateOd('openingSurplusMode', value)} percentLabel="% loan" error={issueFor('od.openingSurplusMode')} />
                     </div>
                     <NumberField id="monthly-surplus" label="Monthly parked contribution" value={scenario.od.monthlyContribution} onChange={(value) => updateOd('monthlyContribution', value)} prefix="₹" hint="Deposited on each EMI date after the scheduled transfer." error={issueFor('od.monthlyContribution')} />
                   </div>

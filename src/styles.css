@@ -190,7 +190,7 @@ h3 { margin: 8px 0 0; font-family: Iowan Old Style, Baskerville, Georgia, serif;
 .field { display: grid; gap: 7px; }
 .field-label { font-size: 12px; font-weight: 750; color: #383d37; }
 .field small { min-height: 1.2em; font-size: 10px; line-height: 1.35; color: var(--muted); }
-.field .field-error { color: var(--danger); font-weight: 700; }
+.field .field-error, .mode-field .field-error { color: var(--danger); font-weight: 700; }
 .field:has([aria-invalid="true"]) .input-shell { border-color: var(--danger); }
 .input-shell {
   min-height: 48px;
@@ -207,6 +207,10 @@ h3 { margin: 8px 0 0; font-family: Iowan Old Style, Baskerville, Georgia, serif;
 .input-affix { display: grid; place-items: center; min-width: 42px; padding: 0 10px; border-right: 1px solid #b9b5aa; color: var(--green); font-weight: 800; font-size: 12px; }
 .input-shell input + .input-affix { border-right: 0; border-left: 1px solid #b9b5aa; }
 .field-with-mode { display: grid; gap: 8px; }
+.mode-field { min-width: 0; margin: 0; padding: 0; border: 0; display: grid; gap: 7px; }
+.mode-field legend { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+.mode-field small { font-size: 10px; line-height: 1.35; color: var(--muted); }
+.mode-field[aria-invalid="true"] .segmented { border-color: var(--danger); }
 
 .segmented { display: inline-flex; justify-self: start; border: 1px solid #aaa89e; }
 .segmented button { min-height: 30px; padding: 5px 10px; border: 0; border-right: 1px solid #aaa89e; background: transparent; color: var(--muted); font-size: 10px; font-weight: 750; }
