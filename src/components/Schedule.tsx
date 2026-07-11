@@ -94,7 +94,7 @@ export function Schedule({ result }: { result: CalculationResult }) {
       <p className="section-copy">Expand a calendar year to inspect every payment and closing balance.</p>
       <div className="year-list">
         {groups.map((group, index) => (
-          <YearSchedule key={group.year} group={group} initiallyOpen={index === 0} />
+          <YearSchedule key={`${group.year}-${index === 0 ? 'open' : 'closed'}`} group={group} initiallyOpen={index === 0} />
         ))}
       </div>
     </section>
