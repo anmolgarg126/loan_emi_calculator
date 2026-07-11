@@ -162,7 +162,7 @@ One Playwright smoke test runs against the built production preview and covers t
 
 ## Deployment
 
-Vite builds static files into `dist`. GitHub Actions runs lint, type-check, unit tests, build, and the Playwright production-preview smoke test before uploading `dist` to GitHub Pages from `main`. The repository's reuse license must be chosen explicitly before public release; no license is assumed by the design. The project-site base path is `/loan_emi_calculator/`. A verified custom domain changes the base to `/` and uses GitHub Pages HTTPS. Rollback redeploys a previously verified commit.
+Vite builds static files into `dist`. GitHub Actions runs lint, type-check, unit tests, build, and the Playwright production-preview smoke test before uploading `dist` to GitHub Pages from `main`. The repository name is fixed as `loan_emi_calculator`, but its owner is dynamic. The workflow sets `VITE_BASE_PATH` to `/${{ github.event.repository.name }}/` and `VITE_SITE_URL` to `https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/`; Vite consumes those build-time values, while runtime share links use `window.location.origin` plus `import.meta.env.BASE_URL`. A username or ownership change requires a manual workflow redeployment but no source edit. HTTPS is required, and custom domains are out of scope for v1. The repository's reuse license must be chosen explicitly before public release; no license is assumed by the design. Rollback redeploys a previously verified commit.
 
 ## Acceptance criteria
 
@@ -176,4 +176,4 @@ Vite builds static files into `dist`. GitHub Actions runs lint, type-check, unit
 - UI, tables, charts, CSV, and XLSX reconcile to the same result model.
 - XLSX dates and numbers are native typed cells, not display strings.
 - No user data is sent to an application backend because no backend exists.
-- The production build deploys successfully to the expected GitHub Pages URL.
+- The production build deploys successfully to the URL derived from the current `github.repository_owner` and repository name, with working assets and share fragments.
