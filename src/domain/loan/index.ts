@@ -85,6 +85,11 @@ export interface OdScheduleRow {
   netUtilized: number
 }
 
+export interface ValidationIssue {
+  field: string
+  message: string
+}
+
 export interface CalculationResult {
   scenario: LoanScenario
   loanAmount: number
@@ -115,6 +120,7 @@ export interface CalculationResult {
     totalModelledOutflow: number
   }
   warnings: string[]
+  issues: ValidationIssue[]
   errors: string[]
 }
 
@@ -230,75 +236,135 @@ const prepaymentDue = (item: Prepayment, paymentCycle: number, startCycle: numbe
   return interval === 0 ? delta === 0 : delta % interval === 0
 }
 
-export const validateScenario = (scenario: LoanScenario) => {
-  const errors: string[] = []
-  const checkMoney = (label: string, value: number, allowZero = true) => {
-    if (!Number.isFinite(value) || value < 0 || value > MAX_MONEY || (!allowZero && value === 0)) {
-      errors.push(`${label} must be ${allowZero ? 'between ₹0' : 'above ₹0'} and ₹100 crore.`)
-    }
-  }
-
-  checkMoney('Home value', scenario.homeValue, false)
-  checkMoney('Down payment', scenario.downPayment)
-  checkMoney('Loan insurance', scenario.loanInsurance)
-  checkMoney('Processing fee', scenario.processingFee)
-  checkMoney('One-time expenses', scenario.oneTimeExpenses)
-  checkMoney('Property tax', scenario.propertyTaxAnnual)
-  checkMoney('Home insurance', scenario.homeInsuranceAnnual)
-  checkMoney('Maintenance', scenario.maintenanceMonthly)
-  if (!Number.isInteger(scenario.tenureMonths) || scenario.tenureMonths < 1 || scenario.tenureMonths > 480) {
-    errors.push('Tenure must be between 1 and 480 months.')
-  }
-  if (scenario.annualRate < 0 || scenario.annualRate > 50) errors.push('Interest rate must be between 0% and 50%.')
-  if (!Number.isFinite(toEpochDay(scenario.startDate))) errors.push('Start date must be a valid calendar date.')
-
-  for (const [label, value, mode] of [
-    ['Down payment', scenario.downPayment, scenario.downPaymentMode],
-    ['Processing fee', scenario.processingFee, scenario.processingFeeMode],
-    ['One-time expenses', scenario.oneTimeExpenses, scenario.oneTimeExpensesMode],
-    ['Property tax', scenario.propertyTaxAnnual, scenario.propertyTaxMode],
-    ['Home insurance', scenario.homeInsuranceAnnual, scenario.homeInsuranceMode],
-  ] as const) {
-    if (mode === 'percent' && value > 100) errors.push(`${label} percentage must be between 0% and 100%.`)
-  }
-
-  scenario.rateChanges.forEach((change) => {
-    if (!isCycleDate(scenario.startDate, change.date) || change.date === scenario.startDate) {
-      errors.push(`Rate change ${change.date || '(missing date)'} must fall on a future EMI cycle date.`)
-    }
-    if (change.annualRate < 0 || change.annualRate > 50) errors.push('Changed rate must be between 0% and 50%.')
+const duplicates = <T>(items: T[], key: (item: T) => string) => {
+  const seen = new Set<string>()
+  const repeated = new Set<string>()
+  items.forEach((item) => {
+    const value = key(item)
+    if (seen.has(value)) repeated.add(value)
+    seen.add(value)
   })
-  scenario.prepayments.forEach((item) => {
-    if (!isCycleDate(scenario.startDate, item.date) || item.date === scenario.startDate) {
-      errors.push(`Prepayment ${item.date || '(missing date)'} must fall on a future EMI date.`)
+  return repeated
+}
+
+export const validateScenario = (scenario: LoanScenario): ValidationIssue[] => {
+  const issues: ValidationIssue[] = []
+  const addIssue = (field: string, message: string) => issues.push({ field, message })
+  const checkMoney = (field: string, label: string, value: number, allowZero = true) => {
+    if (!Number.isFinite(value) || value < 0 || value > MAX_MONEY || (!allowZero && value === 0)) {
+      addIssue(field, `${label} must be ${allowZero ? 'between ₹0' : 'above ₹0'} and ₹100 crore.`)
     }
-    checkMoney('Prepayment', item.amount)
+  }
+  const checkMode = (field: string, value: unknown) => {
+    if (value !== 'amount' && value !== 'percent') addIssue(field, 'Mode must be amount or percent.')
+  }
+  const itemField = (list: string, id: unknown, index: number, field: string) =>
+    `${list}.${typeof id === 'string' && id.trim() ? id : index}.${field}`
+
+  checkMoney('homeValue', 'Home value', scenario.homeValue, false)
+  checkMoney('downPayment', 'Down payment', scenario.downPayment)
+  checkMoney('loanInsurance', 'Loan insurance', scenario.loanInsurance)
+  checkMoney('processingFee', 'Processing fee', scenario.processingFee)
+  checkMoney('oneTimeExpenses', 'One-time expenses', scenario.oneTimeExpenses)
+  checkMoney('propertyTaxAnnual', 'Property tax', scenario.propertyTaxAnnual)
+  checkMoney('homeInsuranceAnnual', 'Home insurance', scenario.homeInsuranceAnnual)
+  checkMoney('maintenanceMonthly', 'Maintenance', scenario.maintenanceMonthly)
+  if (!Number.isInteger(scenario.tenureMonths) || scenario.tenureMonths < 1 || scenario.tenureMonths > 480) {
+    addIssue('tenureMonths', 'Tenure must be between 1 and 480 months.')
+  }
+  if (!Number.isFinite(scenario.annualRate) || scenario.annualRate < 0 || scenario.annualRate > 50) {
+    addIssue('annualRate', 'Interest rate must be between 0% and 50%.')
+  }
+  if (!Number.isFinite(toEpochDay(scenario.startDate))) addIssue('startDate', 'Start date must be a valid calendar date.')
+
+  for (const [field, label, value, mode] of [
+    ['downPayment', 'Down payment', scenario.downPayment, scenario.downPaymentMode],
+    ['processingFee', 'Processing fee', scenario.processingFee, scenario.processingFeeMode],
+    ['oneTimeExpenses', 'One-time expenses', scenario.oneTimeExpenses, scenario.oneTimeExpensesMode],
+    ['propertyTaxAnnual', 'Property tax', scenario.propertyTaxAnnual, scenario.propertyTaxMode],
+    ['homeInsuranceAnnual', 'Home insurance', scenario.homeInsuranceAnnual, scenario.homeInsuranceMode],
+  ] as const) {
+    checkMode(`${field}Mode`, mode)
+    if (mode === 'percent' && (!Number.isFinite(value) || value > 100)) {
+      addIssue(field, `${label} percentage must be between 0% and 100%.`)
+    }
+  }
+
+  if (scenario.rateChanges.length > 100) addIssue('rateChanges', 'Rate changes are limited to 100 entries.')
+  if (duplicates(scenario.rateChanges, ({ id }) => typeof id === 'string' ? id : '').size > 0) {
+    addIssue('rateChanges', 'Rate-change IDs must be unique.')
+  }
+  scenario.rateChanges.forEach((change, index) => {
+    if (typeof change.id !== 'string' || !change.id.trim()) {
+      addIssue(itemField('rateChanges', change.id, index, 'id'), 'Rate-change IDs must not be blank.')
+    }
+    if (!isCycleDate(scenario.startDate, change.date) || change.date === scenario.startDate) {
+      addIssue(itemField('rateChanges', change.id, index, 'date'), `Rate change ${change.date || '(missing date)'} must fall on a future EMI cycle date.`)
+    }
+    if (!Number.isFinite(change.annualRate) || change.annualRate < 0 || change.annualRate > 50) {
+      addIssue(itemField('rateChanges', change.id, index, 'annualRate'), 'Changed rate must be between 0% and 50%.')
+    }
+    if (change.mode !== 'keep-emi' && change.mode !== 'keep-tenure') {
+      addIssue(itemField('rateChanges', change.id, index, 'mode'), 'Rate-change mode must be keep-emi or keep-tenure.')
+    }
+  })
+  duplicates(scenario.rateChanges, ({ date }) => date).forEach((date) => {
+    addIssue('rateChanges', `Only one rate change may apply on ${date}.`)
+  })
+
+  if (scenario.prepayments.length > 100) addIssue('prepayments', 'Prepayments are limited to 100 entries.')
+  if (duplicates(scenario.prepayments, ({ id }) => typeof id === 'string' ? id : '').size > 0) {
+    addIssue('prepayments', 'Prepayment IDs must be unique.')
+  }
+  scenario.prepayments.forEach((item, index) => {
+    if (typeof item.id !== 'string' || !item.id.trim()) {
+      addIssue(itemField('prepayments', item.id, index, 'id'), 'Prepayment IDs must not be blank.')
+    }
+    if (!isCycleDate(scenario.startDate, item.date) || item.date === scenario.startDate) {
+      addIssue(itemField('prepayments', item.id, index, 'date'), `Prepayment ${item.date || '(missing date)'} must fall on a future EMI date.`)
+    }
+    checkMoney(itemField('prepayments', item.id, index, 'amount'), 'Prepayment', item.amount)
+    if (!['monthly', 'quarterly', 'yearly', 'once'].includes(item.frequency)) {
+      addIssue(itemField('prepayments', item.id, index, 'frequency'), 'Prepayment frequency is invalid.')
+    }
   })
 
   if (scenario.od.enabled) {
-    if (scenario.od.premiumRate < 0 || scenario.od.premiumRate > 20) errors.push('OD premium must be between 0% and 20%.')
-    checkMoney('OD setup fee', scenario.od.setupFee)
-    checkMoney('OD annual fee', scenario.od.annualFee)
-    checkMoney('Opening parked surplus', scenario.od.openingSurplus)
-    checkMoney('Monthly parked surplus', scenario.od.monthlyContribution)
-    if (scenario.od.openingSurplusMode === 'percent' && scenario.od.openingSurplus > 100) {
-      errors.push('Opening parked surplus percentage must be between 0% and 100%.')
+    if (!Number.isFinite(scenario.od.premiumRate) || scenario.od.premiumRate < 0 || scenario.od.premiumRate > 20) {
+      addIssue('od.premiumRate', 'OD premium must be between 0% and 20%.')
+    }
+    checkMoney('od.setupFee', 'OD setup fee', scenario.od.setupFee)
+    checkMoney('od.annualFee', 'OD annual fee', scenario.od.annualFee)
+    checkMoney('od.openingSurplus', 'Opening parked surplus', scenario.od.openingSurplus)
+    checkMoney('od.monthlyContribution', 'Monthly parked surplus', scenario.od.monthlyContribution)
+    checkMode('od.openingSurplusMode', scenario.od.openingSurplusMode)
+    if (scenario.od.openingSurplusMode === 'percent' && (!Number.isFinite(scenario.od.openingSurplus) || scenario.od.openingSurplus > 100)) {
+      addIssue('od.openingSurplus', 'Opening parked surplus percentage must be between 0% and 100%.')
     }
     const transactions = scenario.od.transactionsEnabled ? scenario.od.transactions : []
-    if (transactions.length > 100) errors.push('OD transactions are limited to 100 entries.')
-    transactions.forEach((transaction) => {
-      checkMoney('OD transaction', transaction.amount)
+    if (transactions.length > 100) addIssue('od.transactions', 'OD transactions are limited to 100 entries.')
+    if (duplicates(transactions, ({ id }) => typeof id === 'string' ? id : '').size > 0) {
+      addIssue('od.transactions', 'OD transaction IDs must be unique.')
+    }
+    transactions.forEach((transaction, index) => {
+      if (typeof transaction.id !== 'string' || !transaction.id.trim()) {
+        addIssue(itemField('od.transactions', transaction.id, index, 'id'), 'OD transaction IDs must not be blank.')
+      }
+      checkMoney(itemField('od.transactions', transaction.id, index, 'amount'), 'OD transaction', transaction.amount)
+      if (transaction.type !== 'deposit' && transaction.type !== 'withdrawal') {
+        addIssue(itemField('od.transactions', transaction.id, index, 'type'), 'OD transaction type must be deposit or withdrawal.')
+      }
       const day = toEpochDay(transaction.date)
       if (!Number.isFinite(day) || day < toEpochDay(scenario.startDate)) {
-        errors.push(`OD transaction ${transaction.date || '(missing date)'} cannot precede the loan start date.`)
+        addIssue(itemField('od.transactions', transaction.id, index, 'date'), `OD transaction ${transaction.date || '(missing date)'} cannot precede the loan start date.`)
       }
     })
   }
 
   const downPayment = amountFromMode(scenario.downPayment, scenario.downPaymentMode, scenario.homeValue)
   const loanAmount = roundMoney(scenario.homeValue + scenario.loanInsurance - downPayment)
-  if (loanAmount <= 0) errors.push('Loan amount must remain above ₹0 after down payment.')
-  return errors
+  if (Number.isFinite(loanAmount) && loanAmount <= 0) addIssue('loanAmount', 'Loan amount must remain above ₹0 after down payment.')
+  return issues
 }
 
 const buildStandardSchedule = (scenario: LoanScenario, loanAmount: number, monthlyOwnershipCost: number) => {
@@ -491,17 +557,67 @@ const buildOdSchedule = (
   return { schedule, errors, warnings, totalFees, netDebtFreeDate }
 }
 
+const emptyCalculationResult = (
+  scenario: LoanScenario,
+  issues: ValidationIssue[],
+  amounts: Pick<CalculationResult,
+    'loanAmount' | 'downPaymentAmount' | 'processingFeeAmount' | 'oneTimeExpensesAmount'
+    | 'monthlyOwnershipCost' | 'ownershipCostOverOriginalTenure' | 'upfrontCash'>,
+): CalculationResult => ({
+  scenario,
+  ...amounts,
+  standard: {
+    initialEmi: 0,
+    totalInterest: 0,
+    totalPrepayments: 0,
+    payoffDate: scenario.startDate,
+    schedule: [],
+    totalModelledOutflow: 0,
+  },
+  od: {
+    enabled: scenario.od.enabled,
+    effectiveInitialRate: 0,
+    totalInterest: 0,
+    totalFees: 0,
+    feeAdjustedSavings: 0,
+    contractualPayoffDate: scenario.startDate,
+    netDebtFreeDate: null,
+    endingParkedSurplus: 0,
+    schedule: [],
+    totalModelledOutflow: 0,
+  },
+  warnings: [],
+  issues,
+  errors: issues.map(({ message }) => message),
+})
+
 export const calculateLoan = (scenario: LoanScenario): CalculationResult => {
-  const validationErrors = validateScenario(scenario)
-  const downPaymentAmount = amountFromMode(scenario.downPayment, scenario.downPaymentMode, scenario.homeValue)
-  const loanAmount = roundMoney(scenario.homeValue + scenario.loanInsurance - downPaymentAmount)
-  const processingFeeAmount = amountFromMode(scenario.processingFee, scenario.processingFeeMode, loanAmount)
-  const oneTimeExpensesAmount = amountFromMode(scenario.oneTimeExpenses, scenario.oneTimeExpensesMode, scenario.homeValue)
-  const propertyTax = amountFromMode(scenario.propertyTaxAnnual, scenario.propertyTaxMode, scenario.homeValue)
-  const homeInsurance = amountFromMode(scenario.homeInsuranceAnnual, scenario.homeInsuranceMode, scenario.homeValue)
-  const monthlyOwnershipCost = roundMoney(propertyTax / 12 + homeInsurance / 12 + scenario.maintenanceMonthly)
-  const ownershipCostOverOriginalTenure = roundMoney(monthlyOwnershipCost * scenario.tenureMonths)
+  const validationIssues = validateScenario(scenario)
+  const finite = (value: number) => Number.isFinite(value) ? value : 0
+  const safeAmountFromMode = (value: number, mode: MoneyMode, base: number) =>
+    finite(amountFromMode(finite(value), mode, finite(base)))
+  const downPaymentAmount = safeAmountFromMode(scenario.downPayment, scenario.downPaymentMode, scenario.homeValue)
+  const loanAmount = finite(roundMoney(finite(scenario.homeValue) + finite(scenario.loanInsurance) - downPaymentAmount))
+  const processingFeeAmount = safeAmountFromMode(scenario.processingFee, scenario.processingFeeMode, loanAmount)
+  const oneTimeExpensesAmount = safeAmountFromMode(scenario.oneTimeExpenses, scenario.oneTimeExpensesMode, scenario.homeValue)
+  const propertyTax = safeAmountFromMode(scenario.propertyTaxAnnual, scenario.propertyTaxMode, scenario.homeValue)
+  const homeInsurance = safeAmountFromMode(scenario.homeInsuranceAnnual, scenario.homeInsuranceMode, scenario.homeValue)
+  const monthlyOwnershipCost = finite(roundMoney(propertyTax / 12 + homeInsurance / 12 + finite(scenario.maintenanceMonthly)))
+  const ownershipCostOverOriginalTenure = finite(roundMoney(monthlyOwnershipCost * finite(scenario.tenureMonths)))
   const upfrontCash = roundMoney(downPaymentAmount + processingFeeAmount + oneTimeExpensesAmount)
+  const amounts = {
+    loanAmount,
+    downPaymentAmount,
+    processingFeeAmount,
+    oneTimeExpensesAmount,
+    monthlyOwnershipCost,
+    ownershipCostOverOriginalTenure,
+    upfrontCash,
+  }
+  const blockingFields = new Set(['homeValue', 'annualRate', 'tenureMonths', 'startDate'])
+  if (validationIssues.some(({ field }) => blockingFields.has(field))) {
+    return emptyCalculationResult(scenario, validationIssues, amounts)
+  }
   const standard = buildStandardSchedule(scenario, Math.max(0, loanAmount), monthlyOwnershipCost)
   const calculatedPayoffDay = toEpochDay(standard.schedule.at(-1)?.date ?? scenario.startDate)
   const postPayoffErrors = scenario.od.enabled && scenario.od.transactionsEnabled
@@ -511,7 +627,11 @@ export const calculateLoan = (scenario: LoanScenario): CalculationResult => {
     : []
   const openingSurplusAmount = amountFromMode(scenario.od.openingSurplus, scenario.od.openingSurplusMode, loanAmount)
   const od = buildOdSchedule(scenario, Math.max(0, loanAmount), standard.schedule, openingSurplusAmount)
-  const errors = [...validationErrors, ...standard.errors, ...postPayoffErrors, ...od.errors]
+  const engineIssues = [...standard.errors, ...postPayoffErrors, ...od.errors]
+    .filter((message) => !validationIssues.some((issue) => issue.message === message))
+    .map((message) => ({ field: 'scenario', message }))
+  const issues = [...validationIssues, ...engineIssues]
+  const errors = issues.map(({ message }) => message)
   const totalInterest = roundMoney(standard.schedule.reduce((sum, row) => sum + row.interest, 0))
   const totalPrepayments = roundMoney(standard.schedule.reduce((sum, row) => sum + row.prepayment, 0))
   const odInterest = roundMoney(od.schedule.reduce((sum, row) => sum + row.interest, 0))
@@ -549,6 +669,7 @@ export const calculateLoan = (scenario: LoanScenario): CalculationResult => {
       totalModelledOutflow: roundMoney(upfrontCash + loanAmount + odInterest + od.totalFees + ownershipCostOverOriginalTenure),
     },
     warnings: od.warnings,
+    issues,
     errors,
   }
 }

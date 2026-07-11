@@ -240,6 +240,102 @@ describe('loan engine', () => {
     expect(excess.warnings.some((warning) => warning.includes('exceeds drawing power'))).toBe(true)
   })
 
+  it('rejects duplicate IDs, duplicate rate dates, and excessive optional lists', () => {
+    const base = defaultScenario()
+    const date = addMonths(base.startDate, 1)
+    const result = calculateLoan({
+      ...base,
+      rateChanges: [
+        { id: 'same', date, annualRate: 8, mode: 'keep-emi' },
+        { id: 'same', date, annualRate: 9, mode: 'keep-tenure' },
+      ],
+      prepayments: Array.from({ length: 101 }, (_, index) => ({
+        id: `p-${index}`, date, amount: 1, frequency: 'once' as const,
+      })),
+    })
+
+    expect(result.errors).toContain('Rate-change IDs must be unique.')
+    expect(result.errors).toContain(`Only one rate change may apply on ${date}.`)
+    expect(result.errors).toContain('Prepayments are limited to 100 entries.')
+  })
+
+  it('returns field-keyed blocking issues without generating schedules', () => {
+    const result = calculateLoan({ ...defaultScenario(), homeValue: 0, annualRate: 51 })
+
+    expect(result.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ field: 'homeValue' }),
+      expect.objectContaining({ field: 'annualRate' }),
+    ]))
+    expect(result.standard.schedule).toEqual([])
+    expect(result.od.schedule).toEqual([])
+    expect(result.standard.totalInterest).toBe(0)
+  })
+
+  it('rejects non-finite values and invalid runtime discriminants', () => {
+    const base = defaultScenario()
+    const date = addMonths(base.startDate, 1)
+    const result = calculateLoan({
+      ...base,
+      downPayment: Number.NaN,
+      downPaymentMode: 'ratio',
+      rateChanges: [{ id: 'rate', date, annualRate: Number.POSITIVE_INFINITY, mode: 'recast' }],
+      prepayments: [{ id: 'prepay', date, amount: Number.NaN, frequency: 'weekly' }],
+      od: {
+        ...base.od,
+        enabled: true,
+        premiumRate: Number.NaN,
+        openingSurplusMode: 'ratio',
+        transactionsEnabled: true,
+        transactions: [{ id: 'tx', date: base.startDate, type: 'transfer', amount: Number.NaN }],
+      },
+    } as unknown as LoanScenario)
+
+    expect(result.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ field: 'downPayment' }),
+      expect.objectContaining({ field: 'downPaymentMode' }),
+      expect.objectContaining({ field: 'rateChanges.rate.annualRate' }),
+      expect.objectContaining({ field: 'rateChanges.rate.mode' }),
+      expect.objectContaining({ field: 'prepayments.prepay.amount' }),
+      expect.objectContaining({ field: 'prepayments.prepay.frequency' }),
+      expect.objectContaining({ field: 'od.premiumRate' }),
+      expect.objectContaining({ field: 'od.openingSurplusMode' }),
+      expect.objectContaining({ field: 'od.transactions.tx.type' }),
+      expect.objectContaining({ field: 'od.transactions.tx.amount' }),
+    ]))
+  })
+
+  it('rejects blank and duplicate event IDs and limits rate changes', () => {
+    const base = defaultScenario()
+    const date = addMonths(base.startDate, 1)
+    const result = calculateLoan({
+      ...base,
+      rateChanges: Array.from({ length: 101 }, (_, index) => ({
+        id: index < 2 ? '' : `rate-${index}`,
+        date: addMonths(base.startDate, index + 1),
+        annualRate: 9,
+        mode: 'keep-emi' as const,
+      })),
+      prepayments: [
+        { id: 'prepay', date, amount: 1, frequency: 'once' },
+        { id: 'prepay', date, amount: 1, frequency: 'once' },
+      ],
+      od: {
+        ...base.od,
+        enabled: true,
+        transactionsEnabled: true,
+        transactions: [
+          { id: 'tx', date: base.startDate, type: 'deposit', amount: 1 },
+          { id: 'tx', date: base.startDate, type: 'deposit', amount: 1 },
+        ],
+      },
+    })
+
+    expect(result.errors).toContain('Rate changes are limited to 100 entries.')
+    expect(result.errors).toContain('Rate-change IDs must not be blank.')
+    expect(result.errors).toContain('Prepayment IDs must be unique.')
+    expect(result.errors).toContain('OD transaction IDs must be unique.')
+  })
+
   it('keeps permanent prepayments separate from withdrawable surplus', () => {
     const base = defaultScenario()
     const prepaymentDate = addMonths(base.startDate, 1)
