@@ -499,99 +499,110 @@ const buildOdSchedule = (
   const warnings: string[] = []
   const schedule: OdScheduleRow[] = []
   const transactions = scenario.od.transactionsEnabled ? scenario.od.transactions : []
-  const transactionMap = new Map<number, OdTransaction[]>()
+  const payments = new Map(standardSchedule.map((row, index) => [toEpochDay(row.date), { row, index }]))
+  const transactionsByDay = new Map<number, OdTransaction[]>()
   transactions.forEach((transaction) => {
     const day = toEpochDay(transaction.date)
-    const list = transactionMap.get(day) ?? []
-    list.push(transaction)
-    transactionMap.set(day, list)
+    transactionsByDay.set(day, [...(transactionsByDay.get(day) ?? []), transaction])
   })
 
   let drawingPower = loanAmount
   let parkedSurplus = openingSurplusAmount
   let totalFees = scenario.od.setupFee
-  let netDebtFreeDate: string | null = parkedSurplus >= drawingPower ? scenario.startDate : null
+  let accruedInterest = 0
+  let activeRate = (standardSchedule[0]?.annualRate ?? scenario.annualRate) + scenario.od.premiumRate
+  let periodDeposits = 0
+  let periodWithdrawals = 0
+  let lastPositiveDay: number | null = null
   let excessWarned = parkedSurplus > drawingPower
   if (excessWarned) {
     warnings.push('Parked surplus exceeds drawing power; the excess remains withdrawable but earns no additional interest benefit.')
   }
 
-  for (let index = 0; index < standardSchedule.length; index += 1) {
-    const standardRow = standardSchedule[index]!
-    const periodStart = addMonths(scenario.startDate, index)
-    const periodEnd = standardRow.date
-    const startDay = toEpochDay(periodStart)
-    const endDay = toEpochDay(periodEnd)
-    let deposits = 0
-    let withdrawals = 0
-    let accruedInterest = 0
+  const finalPaymentDay = toEpochDay(standardSchedule.at(-1)?.date ?? scenario.startDate)
+  for (let day = toEpochDay(scenario.startDate); day <= finalPaymentDay; day += 1) {
+    const paymentEvent = payments.get(day)
+    let postedInterest = 0
+    let annualFee = 0
+    let prepayment = 0
+    let payment = 0
+    let principalReduction = 0
 
-    for (let day = startDay; day < endDay; day += 1) {
-      const dayTransactions = transactionMap.get(day) ?? []
-      const dayDeposits = dayTransactions
-        .filter((transaction) => transaction.type === 'deposit')
-        .reduce((sum, transaction) => sum + transaction.amount, 0)
-      const dayWithdrawals = dayTransactions
-        .filter((transaction) => transaction.type === 'withdrawal')
-        .reduce((sum, transaction) => sum + transaction.amount, 0)
-      if (dayDeposits > 0) {
-        parkedSurplus = roundMoney(parkedSurplus + dayDeposits)
-        deposits = roundMoney(deposits + dayDeposits)
+    if (paymentEvent) {
+      postedInterest = roundMoney(accruedInterest)
+      accruedInterest = 0
+      const { row, index } = paymentEvent
+      const wasOpen = drawingPower > 0.005
+      principalReduction = roundMoney(Math.min(drawingPower, row.principal))
+      prepayment = roundMoney(Math.min(Math.max(0, drawingPower - principalReduction), row.prepayment))
+      const requiredPayment = roundMoney(postedInterest + principalReduction)
+      payment = Math.max(row.emi, requiredPayment)
+      parkedSurplus = roundMoney(parkedSurplus + Math.max(0, payment - requiredPayment))
+      drawingPower = roundMoney(Math.max(0, drawingPower - principalReduction - prepayment))
+      if (drawingPower > 0.005) {
+        parkedSurplus = roundMoney(parkedSurplus + scenario.od.monthlyContribution)
+        periodDeposits = roundMoney(periodDeposits + scenario.od.monthlyContribution)
       }
-      if (dayWithdrawals > parkedSurplus + 0.005) {
-        errors.push(`Withdrawal on ${fromEpochDay(day)} exceeds the available parked surplus.`)
-        break
-      }
-      if (dayWithdrawals > 0) {
-        parkedSurplus = roundMoney(parkedSurplus - dayWithdrawals)
-        withdrawals = roundMoney(withdrawals + dayWithdrawals)
-      }
-      const netUtilized = Math.max(0, drawingPower - parkedSurplus)
-      accruedInterest += netUtilized * ((standardRow.annualRate + scenario.od.premiumRate) / 100 / 365)
-      if (!netDebtFreeDate && parkedSurplus >= drawingPower) netDebtFreeDate = fromEpochDay(day)
+      annualFee = (index + 1) % 12 === 0 && wasOpen ? scenario.od.annualFee : 0
+      totalFees = roundMoney(totalFees + annualFee)
     }
-    if (errors.length > 0) break
 
-    const postedInterest = roundMoney(accruedInterest)
-    const wasOpenAtPayment = drawingPower > 0.005
-    const contractualPrincipal = Math.min(drawingPower, standardRow.principal)
-    const prepayment = Math.min(Math.max(0, drawingPower - contractualPrincipal), standardRow.prepayment)
-    const requiredPayment = roundMoney(postedInterest + contractualPrincipal)
-    const payment = Math.max(standardRow.emi, requiredPayment)
-    const paymentExcess = roundMoney(Math.max(0, payment - requiredPayment))
-    parkedSurplus = roundMoney(parkedSurplus + paymentExcess)
-    drawingPower = roundMoney(Math.max(0, drawingPower - contractualPrincipal - prepayment))
+    const dayTransactions = transactionsByDay.get(day) ?? []
+    const dayDeposits = roundMoney(dayTransactions
+      .filter(({ type }) => type === 'deposit')
+      .reduce((sum, { amount }) => sum + amount, 0))
+    const dayWithdrawals = roundMoney(dayTransactions
+      .filter(({ type }) => type === 'withdrawal')
+      .reduce((sum, { amount }) => sum + amount, 0))
 
-    const monthlyDeposit = drawingPower > 0.005 ? scenario.od.monthlyContribution : 0
-    parkedSurplus = roundMoney(parkedSurplus + monthlyDeposit)
-    deposits = roundMoney(deposits + monthlyDeposit)
+    parkedSurplus = roundMoney(parkedSurplus + dayDeposits)
+    periodDeposits = roundMoney(periodDeposits + dayDeposits)
+    if (dayWithdrawals > parkedSurplus + 0.005) {
+      errors.push(`Withdrawal on ${fromEpochDay(day)} exceeds the available parked surplus.`)
+      break
+    }
+    parkedSurplus = roundMoney(parkedSurplus - dayWithdrawals)
+    periodWithdrawals = roundMoney(periodWithdrawals + dayWithdrawals)
 
-    const annualFee = (index + 1) % 12 === 0 && wasOpenAtPayment ? scenario.od.annualFee : 0
-    totalFees = roundMoney(totalFees + annualFee)
+    const netUtilized = roundMoney(Math.max(0, drawingPower - parkedSurplus))
+    if (netUtilized > 0.005) lastPositiveDay = day
     if (parkedSurplus > drawingPower && !excessWarned) {
       warnings.push('Parked surplus exceeds drawing power; the excess remains withdrawable but earns no additional interest benefit.')
       excessWarned = true
     }
-    if (!netDebtFreeDate && parkedSurplus >= drawingPower) netDebtFreeDate = periodEnd
 
-    schedule.push({
-      month: index + 1,
-      date: periodEnd,
-      annualRate: standardRow.annualRate + scenario.od.premiumRate,
-      payment,
-      principalReduction: contractualPrincipal,
-      interest: postedInterest,
-      prepayment,
-      deposit: deposits,
-      withdrawal: withdrawals,
-      fee: annualFee + (index === 0 ? scenario.od.setupFee : 0),
-      drawingPower,
-      parkedSurplus,
-      availableWithdrawal: parkedSurplus,
-      netUtilized: roundMoney(Math.max(0, drawingPower - parkedSurplus)),
-    })
+    if (paymentEvent) {
+      const { row, index } = paymentEvent
+      schedule.push({
+        month: index + 1,
+        date: row.date,
+        annualRate: row.annualRate + scenario.od.premiumRate,
+        payment,
+        principalReduction,
+        interest: postedInterest,
+        prepayment,
+        deposit: periodDeposits,
+        withdrawal: periodWithdrawals,
+        fee: annualFee + (index === 0 ? scenario.od.setupFee : 0),
+        drawingPower,
+        parkedSurplus,
+        availableWithdrawal: parkedSurplus,
+        netUtilized,
+      })
+      periodDeposits = 0
+      periodWithdrawals = 0
+      activeRate = (standardSchedule[index + 1]?.annualRate ?? row.annualRate) + scenario.od.premiumRate
+    }
+
+    accruedInterest += netUtilized * (activeRate / 100 / 365)
   }
 
+  const endingNetUtilized = Math.max(0, drawingPower - parkedSurplus)
+  const netDebtFreeDate = endingNetUtilized > 0.005
+    ? null
+    : lastPositiveDay === null
+      ? scenario.startDate
+      : fromEpochDay(lastPositiveDay + 1)
   return { schedule, errors, warnings, totalFees, netDebtFreeDate }
 }
 

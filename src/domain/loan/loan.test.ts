@@ -146,6 +146,43 @@ describe('loan engine', () => {
     expect(onFirstEmi.errors).toEqual([])
   })
 
+  it('attributes EMI-date OD flows to that payment row', () => {
+    const base = defaultScenario()
+    const firstEmi = addMonths(base.startDate, 1)
+    const result = calculateLoan({
+      ...base,
+      tenureMonths: 12,
+      od: {
+        ...base.od,
+        enabled: true,
+        monthlyContribution: 1_000,
+        transactionsEnabled: true,
+        transactions: [{ id: 'same-day', date: firstEmi, type: 'deposit', amount: 500 }],
+      },
+    })
+    expect(result.od.schedule[0]?.deposit).toBe(1_500)
+    expect(result.od.schedule[1]?.deposit).toBe(1_000)
+    expect(result.od.schedule.reduce((sum, row) => sum + row.deposit, 0)).toBe(11_500)
+  })
+
+  it('reports only a permanent net debt-free date', () => {
+    const base = defaultScenario()
+    const withdrawalDate = addMonths(base.startDate, 2)
+    const result = calculateLoan({
+      ...base,
+      tenureMonths: 24,
+      od: {
+        ...base.od,
+        enabled: true,
+        openingSurplus: 4_000_000,
+        transactionsEnabled: true,
+        transactions: [{ id: 'withdraw', date: withdrawalDate, type: 'withdrawal', amount: 3_000_000 }],
+      },
+    })
+    expect(result.od.netDebtFreeDate).not.toBe(base.startDate)
+    expect(toEpochDay(result.od.netDebtFreeDate!)).toBeGreaterThan(toEpochDay(withdrawalDate))
+  })
+
   it('nets same-day deposits before validating withdrawals', () => {
     const base = defaultScenario()
     const result = calculateLoan({
@@ -163,6 +200,8 @@ describe('loan engine', () => {
     })
     expect(result.errors).toEqual([])
     expect(result.od.schedule[0]?.parkedSurplus).toBe(0)
+    expect(result.od.schedule.reduce((sum, row) => sum + row.deposit, 0)).toBe(500)
+    expect(result.od.schedule.reduce((sum, row) => sum + row.withdrawal, 0)).toBe(500)
   })
 
   it('charges setup and anniversary fees while the OD is open', () => {
