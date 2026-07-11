@@ -1,6 +1,6 @@
 # Loan Ledger Hardening Design
 
-**Status:** Approved approach; written specification pending final user review
+**Status:** Approved
 
 **Date:** 2026-07-11
 
