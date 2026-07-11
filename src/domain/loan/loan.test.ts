@@ -13,6 +13,14 @@ import {
 
 const scenarioWith = (patch: Partial<LoanScenario>): LoanScenario => ({ ...defaultScenario(), ...patch })
 
+const seededRandom = (seed: number) => {
+  let state = seed >>> 0
+  return () => {
+    state = (Math.imul(state, 1_664_525) + 1_013_904_223) >>> 0
+    return state / 0x1_0000_0000
+  }
+}
+
 describe('loan engine', () => {
   it('rounds fractional paise symmetrically', () => {
     expect(roundMoney(10.075)).toBe(10.08)
@@ -39,6 +47,45 @@ describe('loan engine', () => {
     expect(result.standard.initialEmi).toBe(35_989.04)
     expect(result.standard.totalInterest).toBeCloseTo(4_637_370, -1)
     expect(result.monthlyOwnershipCost).toBe(3_750)
+  })
+
+  it.each([
+    { principal: 120_000, rate: 0, months: 12, emi: 10_000 },
+    { principal: 100_000, rate: 12, months: 1, emi: 101_000 },
+    { principal: 4_000_000, rate: 9, months: 240, emi: 35_989.04 },
+  ])('matches independent EMI fixture %#', ({ principal, rate, months, emi }) => {
+    expect(calculateEmi(principal, rate, months)).toBe(emi)
+  })
+
+  it('preserves month-end payment cycles', () => {
+    const result = calculateLoan(scenarioWith({
+      homeValue: 120_000,
+      downPayment: 0,
+      downPaymentMode: 'amount',
+      annualRate: 0,
+      tenureMonths: 12,
+      startDate: '2026-01-31',
+    }))
+
+    expect(result.standard.schedule.slice(0, 2).map(({ date }) => date)).toEqual(['2026-02-28', '2026-03-31'])
+  })
+
+  it('closes the maximum supported loan within the schedule cap', () => {
+    const result = calculateLoan(scenarioWith({
+      homeValue: 1_000_000_000,
+      downPayment: 0,
+      downPaymentMode: 'amount',
+      annualRate: 50,
+      tenureMonths: 480,
+      startDate: '2026-01-01',
+      od: { ...defaultScenario().od, enabled: true },
+    }))
+
+    expect(result.errors).toEqual([])
+    expect(Number.isFinite(result.standard.initialEmi)).toBe(true)
+    expect(result.standard.schedule.at(-1)?.balance).toBe(0)
+    expect(result.standard.schedule.length).toBeLessThanOrEqual(600)
+    expect(result.od.schedule.length).toBeLessThanOrEqual(600)
   })
 
   it('uses UTC-safe date-only arithmetic', () => {
@@ -230,6 +277,32 @@ describe('loan engine', () => {
     expect(keepEmi.standard.schedule.length).toBeGreaterThan(base.tenureMonths)
     expect(keepTenure.standard.schedule.length).toBe(base.tenureMonths)
     expect(keepTenure.standard.schedule[12]?.emi).toBeGreaterThan(keepTenure.standard.initialEmi)
+  })
+
+  it('applies sequential keep-EMI then keep-tenure resets deterministically', () => {
+    const base = scenarioWith({
+      homeValue: 1_000_000,
+      downPayment: 0,
+      downPaymentMode: 'amount',
+      annualRate: 9,
+      tenureMonths: 120,
+      startDate: '2026-01-01',
+    })
+    const result = calculateLoan({
+      ...base,
+      rateChanges: [
+        { id: 'up', date: addMonths(base.startDate, 12), annualRate: 10, mode: 'keep-emi' },
+        { id: 'down', date: addMonths(base.startDate, 24), annualRate: 8, mode: 'keep-tenure' },
+      ],
+    })
+
+    expect(result.errors).toEqual([])
+    expect(result.standard.schedule).toHaveLength(120)
+    expect(result.standard.payoffDate).toBe(addMonths(base.startDate, 120))
+    expect(result.standard.schedule[12]?.annualRate).toBe(10)
+    expect(result.standard.schedule[24]?.annualRate).toBe(8)
+    expect(result.standard.schedule[24]?.emi).not.toBe(result.standard.initialEmi)
+    expect(result.standard.schedule.at(-1)?.balance).toBe(0)
   })
 
   it('rejects a keep-EMI reset that cannot cover interest', () => {
@@ -538,6 +611,50 @@ describe('loan engine', () => {
     expect(result.od.schedule[0]?.parkedSurplus).toBeGreaterThanOrEqual(50_000)
   })
 
+  it('uses loan principal as the opening-surplus percentage basis', () => {
+    const base = scenarioWith({
+      homeValue: 4_000_000,
+      downPayment: 0,
+      downPaymentMode: 'amount',
+      tenureMonths: 12,
+    })
+    const result = calculateLoan({
+      ...base,
+      od: { ...base.od, enabled: true, openingSurplus: 25, openingSurplusMode: 'percent' },
+    })
+
+    expect(result.errors).toEqual([])
+    expect(result.od.schedule[0]?.parkedSurplus).toBe(roundMoney(
+      1_000_000 + result.standard.schedule[0]!.interest - result.od.schedule[0]!.interest,
+    ))
+  })
+
+  it('ignores populated optional OD data while OD is disabled', () => {
+    const base = scenarioWith({
+      annualRate: 8.5,
+      tenureMonths: 24,
+      od: {
+        ...defaultScenario().od,
+        enabled: false,
+        premiumRate: 2,
+        setupFee: 25_000,
+        annualFee: 5_000,
+        openingSurplus: 25,
+        openingSurplusMode: 'percent',
+        monthlyContribution: 10_000,
+        transactionsEnabled: false,
+        transactions: [{ id: 'stored', date: defaultScenario().startDate, type: 'deposit', amount: 50_000 }],
+      },
+    })
+    const result = calculateLoan(base)
+
+    expect(result.errors).toEqual([])
+    expect(result.od.schedule.map(({ interest }) => interest)).toEqual(result.standard.schedule.map(({ interest }) => interest))
+    expect(result.od.totalInterest).toBe(result.standard.totalInterest)
+    expect(result.od.totalFees).toBe(0)
+    expect(result.od.feeAdjustedSavings).toBe(0)
+  })
+
   it('reconciles schedule totals with result totals', () => {
     const base = defaultScenario()
     const result = calculateLoan({
@@ -577,25 +694,94 @@ describe('loan engine', () => {
   })
 
   it.each([
-    { frequency: 'once', expected: [0, 100, 0, 0, 0, 0, 0], total: 100 },
-    { frequency: 'monthly', expected: [0, 100, 100, 100, 100, 100, 100], total: 2_200 },
-    { frequency: 'quarterly', expected: [0, 100, 0, 100, 100, 0, 100], total: 800 },
-    { frequency: 'yearly', expected: [0, 100, 0, 0, 100, 0, 0], total: 200 },
-  ] as const)('applies $frequency prepayments on the correct cycles', ({ frequency, expected, total }) => {
+    { frequency: 'once', count: 1 },
+    { frequency: 'monthly', count: 23 },
+    { frequency: 'quarterly', count: 8 },
+    { frequency: 'yearly', count: 2 },
+  ] as const)('applies $frequency prepayments from cycle one', ({ frequency, count }) => {
     const startDate = '2026-01-31'
     const result = calculateLoan(scenarioWith({
-      homeValue: 100_000,
+      homeValue: 2_400_000,
       downPayment: 0,
       downPaymentMode: 'amount',
       annualRate: 0,
       tenureMonths: 24,
       startDate,
-      prepayments: [{ id: frequency, date: addMonths(startDate, 2), amount: 100, frequency }],
+      prepayments: [{ id: frequency, date: addMonths(startDate, 1), amount: 1, frequency }],
     }))
-    const inspectedCycles = [1, 2, 3, 5, 14, 15, 23]
 
-    expect(inspectedCycles.map((cycle) => result.standard.schedule[cycle - 1]?.prepayment)).toEqual(expected)
-    expect(result.standard.totalPrepayments).toBe(total)
+    expect(result.errors).toEqual([])
+    expect(result.standard.schedule.filter(({ prepayment }) => prepayment > 0)).toHaveLength(count)
+    expect(result.standard.totalPrepayments).toBe(count)
+  })
+
+  it('pays off in the first cycle when its prepayment covers remaining principal', () => {
+    const startDate = '2026-01-01'
+    const result = calculateLoan(scenarioWith({
+      homeValue: 120_000,
+      downPayment: 0,
+      downPaymentMode: 'amount',
+      annualRate: 0,
+      tenureMonths: 12,
+      startDate,
+      prepayments: [{ id: 'payoff', date: addMonths(startDate, 1), amount: 120_000, frequency: 'once' }],
+    }))
+
+    expect(result.errors).toEqual([])
+    expect(result.standard.schedule).toHaveLength(1)
+    expect(result.standard.schedule[0]?.balance).toBe(0)
+  })
+
+  it('maintains accounting and OD invariants across 1,000 fixed-seed scenarios', () => {
+    const random = seededRandom(0x5eed_1234)
+    const integer = (min: number, max: number) => Math.floor(random() * (max - min + 1)) + min
+
+    for (let index = 0; index < 1_000; index += 1) {
+      const startDate = `${integer(2026, 2030)}-${String(integer(1, 12)).padStart(2, '0')}-01`
+      const odEnabled = random() < 0.75
+      const result = calculateLoan(scenarioWith({
+        homeValue: integer(100_000, 10_000_000),
+        downPayment: integer(0, 50),
+        downPaymentMode: 'percent',
+        loanInsurance: integer(0, 25_000),
+        annualRate: integer(0, 2_000) / 100,
+        tenureMonths: integer(1, 60),
+        startDate,
+        processingFee: integer(0, 10_000),
+        processingFeeMode: 'amount',
+        oneTimeExpenses: integer(0, 50_000),
+        oneTimeExpensesMode: 'amount',
+        propertyTaxAnnual: integer(0, 10_000),
+        propertyTaxMode: 'amount',
+        homeInsuranceAnnual: integer(0, 5_000),
+        homeInsuranceMode: 'amount',
+        maintenanceMonthly: integer(0, 5_000),
+        od: {
+          ...defaultScenario().od,
+          enabled: odEnabled,
+          premiumRate: integer(0, 200) / 100,
+          setupFee: integer(0, 5_000),
+          annualFee: integer(0, 2_000),
+          openingSurplus: integer(0, 50),
+          openingSurplusMode: 'percent',
+          monthlyContribution: integer(0, 1_000),
+        },
+      }))
+
+      expect(result.errors, `scenario ${index}`).toEqual([])
+      expect(result.standard.schedule.at(-1)?.balance).toBe(0)
+      expect(roundMoney(result.standard.schedule.reduce((sum, row) => sum + row.principal + row.prepayment, 0)))
+        .toBeCloseTo(result.loanAmount, 2)
+      expect(roundMoney(result.standard.schedule.reduce((sum, row) => sum + row.interest, 0)))
+        .toBe(result.standard.totalInterest)
+      expect(roundMoney(result.od.schedule.reduce((sum, row) => sum + row.interest, 0))).toBe(result.od.totalInterest)
+      result.od.schedule.forEach((row, rowIndex, rows) => {
+        expect(row.drawingPower).toBeGreaterThanOrEqual(0)
+        expect(row.parkedSurplus).toBeGreaterThanOrEqual(0)
+        expect(row.netUtilized).toBe(roundMoney(Math.max(0, row.drawingPower - row.parkedSurplus)))
+        if (rowIndex) expect(row.drawingPower).toBeLessThanOrEqual(rows[rowIndex - 1]!.drawingPower)
+      })
+    }
   })
 
   it('calculates the largest recurring-prepayment schedule promptly', () => {

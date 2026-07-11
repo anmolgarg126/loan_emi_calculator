@@ -18,6 +18,34 @@ describe('scenario sharing', () => {
     expect(decodeScenario(`#${fragment}`)).toEqual(scenario)
   })
 
+  it.each([
+    ['maximum loan', { homeValue: 1_000_000_000, downPayment: 0, annualRate: 50, tenureMonths: 480 }],
+    ['month end', { startDate: '2026-01-31' }],
+    ['opening percentage', { od: { enabled: true, openingSurplus: 25, openingSurplusMode: 'percent' } }],
+  ] as const)('round-trips the %s boundary', (_name, patch) => {
+    const base = defaultScenario()
+    const scenario = {
+      ...base,
+      ...patch,
+      od: 'od' in patch ? { ...base.od, ...patch.od } : base.od,
+    }
+
+    expect(decodeScenario(`#${encodeScenario(scenario)}`)).toEqual(scenario)
+  })
+
+  it.each([
+    ['keep-emi', 'monthly'],
+    ['keep-tenure', 'quarterly'],
+    ['keep-emi', 'yearly'],
+    ['keep-tenure', 'once'],
+  ] as const)('round-trips %s resets with %s prepayments', (mode, frequency) => {
+    const scenario = defaultScenario()
+    scenario.rateChanges = [{ id: 'rate', date: scenario.startDate, annualRate: 10, mode }]
+    scenario.prepayments = [{ id: 'prepay', date: scenario.startDate, amount: 1, frequency }]
+
+    expect(decodeScenario(`#${encodeScenario(scenario)}`)).toEqual(scenario)
+  })
+
   it('ignores malformed fragments', () => {
     expect(decodeScenario('#v1=not-json')).toBeNull()
     expect(decodeScenario('#v1=e31')).toBeNull()

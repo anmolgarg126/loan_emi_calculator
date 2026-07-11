@@ -13,55 +13,53 @@ describe('exports', () => {
   it('keeps CSV values machine-readable', () => {
     const result = calculateLoan(defaultScenario())
     const csv = createCsv(result)
+    const [header, ...rows] = csv.split('\n').map((line) => line.split(','))
     expect(csv).toContain('Payment date')
     expect(csv).toContain(String(result.standard.initialEmi))
-    expect(csv.split('\n')).toHaveLength(result.standard.schedule.length + 1)
+    expect(rows).toHaveLength(result.standard.schedule.length)
     expect(csv).not.toContain('₹')
+    expect(header).toEqual(expect.arrayContaining(['Month', 'Standard EMI', 'Standard principal', 'Standard interest']))
+    rows.forEach((row, index) => {
+      expect(row[0]).toBe(String(result.standard.schedule[index]!.month))
+      expect(row[1]).toBe(result.standard.schedule[index]!.date)
+      ;[0, 2, 3, 4, 5, 6, 7].forEach((column) => expect(Number.isFinite(Number(row[column]))).toBe(true))
+    })
   })
 
-  it('writes typed XLSX cells', async () => {
-    const scenario = defaultScenario()
-    const result = calculateLoan({
-      ...scenario,
+  it.each([false, true])('reopens a typed %s OD XLSX workbook', async (odEnabled) => {
+    const scenario = {
+      ...defaultScenario(),
       tenureMonths: 24,
       od: {
-        ...scenario.od,
-        enabled: true,
-        openingSurplus: 100_000,
-        transactionsEnabled: false,
-        transactions: [{ id: 'stored', date: scenario.startDate, type: 'deposit', amount: 10_000 }],
+        ...defaultScenario().od,
+        enabled: odEnabled,
+        openingSurplus: odEnabled ? 100_000 : 0,
+        transactionsEnabled: odEnabled,
+        transactions: [{ id: 'stored', date: defaultScenario().startDate, type: 'deposit' as const, amount: 10_000 }],
       },
+    }
+    const result = calculateLoan({
+      ...scenario,
+      od: { ...scenario.od, transactions: [{ ...scenario.od.transactions[0]!, date: scenario.startDate }] },
     })
     const workbook = await buildWorkbook(result)
-    const monthly = workbook.getWorksheet('Monthly Amortization')!
-    expect(monthly.getCell('A2').value).toBe(1)
-    expect(monthly.getCell('B2').value).toBeInstanceOf(Date)
-    expect(typeof monthly.getCell('D2').value).toBe('number')
-    expect(monthly.getCell('D2').numFmt).toContain('₹')
-    expect(workbook.worksheets.map((sheet) => sheet.name)).toEqual([
-      'Assumptions',
-      'Comparison Summary',
-      'Monthly Amortization',
-      'Yearly Summary',
-      'OD Transactions',
-    ])
-    expect(workbook.getWorksheet('Comparison Summary')?.getCell('C5').value).toEqual({
-      formula: 'B3-C3-C4',
-      result: result.od.feeAdjustedSavings,
-    })
-
     const serialized = await workbook.xlsx.writeBuffer()
     const { Workbook } = await import('exceljs')
     const reopened = new Workbook()
     await reopened.xlsx.load(serialized)
-    expect(reopened.getWorksheet('Monthly Amortization')?.getCell('B2').value).toBeInstanceOf(Date)
-    expect(typeof reopened.getWorksheet('Monthly Amortization')?.getCell('D2').value).toBe('number')
-    expect(reopened.getWorksheet('OD Transactions')?.getCell('D1').value).toBe('Enabled')
-    expect(reopened.getWorksheet('OD Transactions')?.getCell('D2').value).toBe(false)
-    expect(typeof reopened.getWorksheet('OD Transactions')?.getCell('D2').value).toBe('boolean')
-    expect(reopened.getWorksheet('Comparison Summary')?.getCell('C5').value).toEqual({
-      formula: 'B3-C3-C4',
-      result: result.od.feeAdjustedSavings,
-    })
+
+    expect(reopened.worksheets.map(({ name }) => name)).toEqual([
+      'Assumptions', 'Comparison Summary', 'Monthly Amortization', 'Yearly Summary', 'OD Transactions',
+    ])
+    const monthly = reopened.getWorksheet('Monthly Amortization')!
+    expect(monthly.getCell('B2').value).toBeInstanceOf(Date)
+    expect(typeof monthly.getCell('D2').value).toBe('number')
+    expect(monthly.getCell('D2').numFmt).toContain('₹')
+    const savingsFormula = reopened.getWorksheet('Comparison Summary')!.getCell('C5').value
+    expect(savingsFormula).toEqual(odEnabled
+      ? { formula: 'B3-C3-C4', result: result.od.feeAdjustedSavings }
+      : { formula: 'B3-C3-C4' })
+    expect(reopened.getWorksheet('OD Transactions')!.getCell('D2').value).toBe(odEnabled)
+    expect(typeof reopened.getWorksheet('OD Transactions')!.getCell('D2').value).toBe('boolean')
   })
 })
