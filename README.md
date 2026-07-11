@@ -1,0 +1,10 @@
+# Loan EMI & Overdraft Calculator
+
+Planning repository for a responsive home-loan calculator with EMI, ownership-cost, prepayment, amortization, export/share, and overdraft-account modelling.
+
+The implementation roadmap and product decisions are documented in [plan.md](./plan.md).
+
+## Status
+
+Planning complete; application scaffolding and implementation have not started.
+
