@@ -304,6 +304,94 @@ describe('loan engine', () => {
     ]))
   })
 
+  it('does not generate schedules from invalid optional inputs', () => {
+    const base = defaultScenario()
+    const date = addMonths(base.startDate, 1)
+    const scenarios = [
+      { ...base, prepayments: [{ id: 'prepay', date, amount: Number.NaN, frequency: 'once' as const }] },
+      { ...base, rateChanges: [{ id: 'rate', date, annualRate: Number.POSITIVE_INFINITY, mode: 'keep-emi' as const }] },
+      { ...base, od: { ...base.od, enabled: true, premiumRate: Number.NaN } },
+    ]
+
+    scenarios.forEach((scenario) => {
+      const result = calculateLoan(scenario)
+      const amounts = [
+        result.loanAmount,
+        result.downPaymentAmount,
+        result.processingFeeAmount,
+        result.oneTimeExpensesAmount,
+        result.monthlyOwnershipCost,
+        result.ownershipCostOverOriginalTenure,
+        result.upfrontCash,
+        result.standard.totalInterest,
+        result.od.totalInterest,
+      ]
+      expect(result.issues.length).toBeGreaterThan(0)
+      expect(result.standard.schedule).toEqual([])
+      expect(result.od.schedule).toEqual([])
+      expect(amounts.every(Number.isFinite)).toBe(true)
+    })
+  })
+
+  it('returns issues instead of throwing for malformed list members', () => {
+    const base = defaultScenario()
+    const result = calculateLoan({
+      ...base,
+      rateChanges: [null, 1],
+      prepayments: [null, 'bad'],
+      od: {
+        ...base.od,
+        enabled: true,
+        transactionsEnabled: true,
+        transactions: [null, false],
+      },
+    } as unknown as LoanScenario)
+
+    expect(result.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ field: 'rateChanges.0' }),
+      expect.objectContaining({ field: 'rateChanges.1' }),
+      expect.objectContaining({ field: 'prepayments.0' }),
+      expect.objectContaining({ field: 'prepayments.1' }),
+      expect.objectContaining({ field: 'od.transactions.0' }),
+      expect.objectContaining({ field: 'od.transactions.1' }),
+    ]))
+    expect(result.standard.schedule).toEqual([])
+    expect(result.od.schedule).toEqual([])
+  })
+
+  it('returns finite non-negative amounts for invalid core inputs', () => {
+    const result = calculateLoan({
+      ...defaultScenario(),
+      homeValue: Number.NaN,
+      downPayment: -1,
+      processingFee: -2,
+      oneTimeExpenses: -3,
+      maintenanceMonthly: -4,
+    })
+
+    expect([
+      result.loanAmount,
+      result.downPaymentAmount,
+      result.processingFeeAmount,
+      result.oneTimeExpensesAmount,
+      result.monthlyOwnershipCost,
+      result.ownershipCostOverOriginalTenure,
+      result.upfrontCash,
+    ].every((value) => Number.isFinite(value) && value >= 0)).toBe(true)
+  })
+
+  it('does not report duplicate rate dates for invalid dates', () => {
+    const result = calculateLoan({
+      ...defaultScenario(),
+      rateChanges: [
+        { id: 'one', date: '', annualRate: 8, mode: 'keep-emi' },
+        { id: 'two', date: '', annualRate: 9, mode: 'keep-tenure' },
+      ],
+    })
+
+    expect(result.errors.some((error) => error.startsWith('Only one rate change may apply on'))).toBe(false)
+  })
+
   it('rejects blank and duplicate event IDs and limits rate changes', () => {
     const base = defaultScenario()
     const date = addMonths(base.startDate, 1)

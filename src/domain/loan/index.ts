@@ -247,11 +247,14 @@ const duplicates = <T>(items: T[], key: (item: T) => string) => {
   return repeated
 }
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null
+
 export const validateScenario = (scenario: LoanScenario): ValidationIssue[] => {
   const issues: ValidationIssue[] = []
   const addIssue = (field: string, message: string) => issues.push({ field, message })
-  const checkMoney = (field: string, label: string, value: number, allowZero = true) => {
-    if (!Number.isFinite(value) || value < 0 || value > MAX_MONEY || (!allowZero && value === 0)) {
+  const checkMoney = (field: string, label: string, value: unknown, allowZero = true) => {
+    if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > MAX_MONEY || (!allowZero && value === 0)) {
       addIssue(field, `${label} must be ${allowZero ? 'between ₹0' : 'above ₹0'} and ₹100 crore.`)
     }
   }
@@ -290,41 +293,69 @@ export const validateScenario = (scenario: LoanScenario): ValidationIssue[] => {
     }
   }
 
-  if (scenario.rateChanges.length > 100) addIssue('rateChanges', 'Rate changes are limited to 100 entries.')
-  if (duplicates(scenario.rateChanges, ({ id }) => typeof id === 'string' ? id : '').size > 0) {
+  const rateChanges: unknown[] = scenario.rateChanges
+  const validRateChanges = rateChanges.filter(isRecord)
+  const identifiedRateChanges = validRateChanges.filter(({ id }) => typeof id === 'string' && id.trim())
+  if (rateChanges.length > 100) addIssue('rateChanges', 'Rate changes are limited to 100 entries.')
+  if (duplicates(identifiedRateChanges, ({ id }) => id as string).size > 0) {
     addIssue('rateChanges', 'Rate-change IDs must be unique.')
   }
-  scenario.rateChanges.forEach((change, index) => {
+  rateChanges.forEach((change, index) => {
+    if (!isRecord(change)) {
+      addIssue(`rateChanges.${index}`, 'Rate change entry must be an object.')
+      return
+    }
     if (typeof change.id !== 'string' || !change.id.trim()) {
       addIssue(itemField('rateChanges', change.id, index, 'id'), 'Rate-change IDs must not be blank.')
     }
-    if (!isCycleDate(scenario.startDate, change.date) || change.date === scenario.startDate) {
-      addIssue(itemField('rateChanges', change.id, index, 'date'), `Rate change ${change.date || '(missing date)'} must fall on a future EMI cycle date.`)
+    const validDate = typeof change.date === 'string'
+      && isCycleDate(scenario.startDate, change.date)
+      && change.date !== scenario.startDate
+    if (!validDate) {
+      const date = typeof change.date === 'string' && change.date ? change.date : '(missing date)'
+      addIssue(itemField('rateChanges', change.id, index, 'date'), `Rate change ${date} must fall on a future EMI cycle date.`)
     }
-    if (!Number.isFinite(change.annualRate) || change.annualRate < 0 || change.annualRate > 50) {
+    if (typeof change.annualRate !== 'number' || !Number.isFinite(change.annualRate) || change.annualRate < 0 || change.annualRate > 50) {
       addIssue(itemField('rateChanges', change.id, index, 'annualRate'), 'Changed rate must be between 0% and 50%.')
     }
     if (change.mode !== 'keep-emi' && change.mode !== 'keep-tenure') {
       addIssue(itemField('rateChanges', change.id, index, 'mode'), 'Rate-change mode must be keep-emi or keep-tenure.')
     }
   })
-  duplicates(scenario.rateChanges, ({ date }) => date).forEach((date) => {
+  const candidateRateDates = validRateChanges
+    .map(({ date }) => date)
+    .filter((date): date is string => typeof date === 'string'
+      && isCycleDate(scenario.startDate, date)
+      && date !== scenario.startDate)
+  duplicates(candidateRateDates, (date) => date).forEach((date) => {
     addIssue('rateChanges', `Only one rate change may apply on ${date}.`)
   })
 
-  if (scenario.prepayments.length > 100) addIssue('prepayments', 'Prepayments are limited to 100 entries.')
-  if (duplicates(scenario.prepayments, ({ id }) => typeof id === 'string' ? id : '').size > 0) {
+  const prepayments: unknown[] = scenario.prepayments
+  const validPrepayments = prepayments.filter(isRecord)
+  const identifiedPrepayments = validPrepayments.filter(({ id }) => typeof id === 'string' && id.trim())
+  if (prepayments.length > 100) addIssue('prepayments', 'Prepayments are limited to 100 entries.')
+  if (duplicates(identifiedPrepayments, ({ id }) => id as string).size > 0) {
     addIssue('prepayments', 'Prepayment IDs must be unique.')
   }
-  scenario.prepayments.forEach((item, index) => {
+  prepayments.forEach((item, index) => {
+    if (!isRecord(item)) {
+      addIssue(`prepayments.${index}`, 'Prepayment entry must be an object.')
+      return
+    }
     if (typeof item.id !== 'string' || !item.id.trim()) {
       addIssue(itemField('prepayments', item.id, index, 'id'), 'Prepayment IDs must not be blank.')
     }
-    if (!isCycleDate(scenario.startDate, item.date) || item.date === scenario.startDate) {
-      addIssue(itemField('prepayments', item.id, index, 'date'), `Prepayment ${item.date || '(missing date)'} must fall on a future EMI date.`)
+    const validDate = typeof item.date === 'string'
+      && isCycleDate(scenario.startDate, item.date)
+      && item.date !== scenario.startDate
+    if (!validDate) {
+      const date = typeof item.date === 'string' && item.date ? item.date : '(missing date)'
+      addIssue(itemField('prepayments', item.id, index, 'date'), `Prepayment ${date} must fall on a future EMI date.`)
     }
     checkMoney(itemField('prepayments', item.id, index, 'amount'), 'Prepayment', item.amount)
-    if (!['monthly', 'quarterly', 'yearly', 'once'].includes(item.frequency)) {
+    if (item.frequency !== 'monthly' && item.frequency !== 'quarterly'
+      && item.frequency !== 'yearly' && item.frequency !== 'once') {
       addIssue(itemField('prepayments', item.id, index, 'frequency'), 'Prepayment frequency is invalid.')
     }
   })
@@ -341,12 +372,18 @@ export const validateScenario = (scenario: LoanScenario): ValidationIssue[] => {
     if (scenario.od.openingSurplusMode === 'percent' && (!Number.isFinite(scenario.od.openingSurplus) || scenario.od.openingSurplus > 100)) {
       addIssue('od.openingSurplus', 'Opening parked surplus percentage must be between 0% and 100%.')
     }
-    const transactions = scenario.od.transactionsEnabled ? scenario.od.transactions : []
+    const transactions: unknown[] = scenario.od.transactionsEnabled ? scenario.od.transactions : []
+    const validTransactions = transactions.filter(isRecord)
+    const identifiedTransactions = validTransactions.filter(({ id }) => typeof id === 'string' && id.trim())
     if (transactions.length > 100) addIssue('od.transactions', 'OD transactions are limited to 100 entries.')
-    if (duplicates(transactions, ({ id }) => typeof id === 'string' ? id : '').size > 0) {
+    if (duplicates(identifiedTransactions, ({ id }) => id as string).size > 0) {
       addIssue('od.transactions', 'OD transaction IDs must be unique.')
     }
     transactions.forEach((transaction, index) => {
+      if (!isRecord(transaction)) {
+        addIssue(`od.transactions.${index}`, 'OD transaction entry must be an object.')
+        return
+      }
       if (typeof transaction.id !== 'string' || !transaction.id.trim()) {
         addIssue(itemField('od.transactions', transaction.id, index, 'id'), 'OD transaction IDs must not be blank.')
       }
@@ -354,9 +391,10 @@ export const validateScenario = (scenario: LoanScenario): ValidationIssue[] => {
       if (transaction.type !== 'deposit' && transaction.type !== 'withdrawal') {
         addIssue(itemField('od.transactions', transaction.id, index, 'type'), 'OD transaction type must be deposit or withdrawal.')
       }
-      const day = toEpochDay(transaction.date)
+      const day = typeof transaction.date === 'string' ? toEpochDay(transaction.date) : Number.NaN
       if (!Number.isFinite(day) || day < toEpochDay(scenario.startDate)) {
-        addIssue(itemField('od.transactions', transaction.id, index, 'date'), `OD transaction ${transaction.date || '(missing date)'} cannot precede the loan start date.`)
+        const date = typeof transaction.date === 'string' && transaction.date ? transaction.date : '(missing date)'
+        addIssue(itemField('od.transactions', transaction.id, index, 'date'), `OD transaction ${date} cannot precede the loan start date.`)
       }
     })
   }
@@ -614,9 +652,17 @@ export const calculateLoan = (scenario: LoanScenario): CalculationResult => {
     ownershipCostOverOriginalTenure,
     upfrontCash,
   }
-  const blockingFields = new Set(['homeValue', 'annualRate', 'tenureMonths', 'startDate'])
-  if (validationIssues.some(({ field }) => blockingFields.has(field))) {
-    return emptyCalculationResult(scenario, validationIssues, amounts)
+  if (validationIssues.length > 0) {
+    const nonNegativeFinite = (value: number) => Number.isFinite(value) ? Math.max(0, value) : 0
+    return emptyCalculationResult(scenario, validationIssues, {
+      loanAmount: nonNegativeFinite(amounts.loanAmount),
+      downPaymentAmount: nonNegativeFinite(amounts.downPaymentAmount),
+      processingFeeAmount: nonNegativeFinite(amounts.processingFeeAmount),
+      oneTimeExpensesAmount: nonNegativeFinite(amounts.oneTimeExpensesAmount),
+      monthlyOwnershipCost: nonNegativeFinite(amounts.monthlyOwnershipCost),
+      ownershipCostOverOriginalTenure: nonNegativeFinite(amounts.ownershipCostOverOriginalTenure),
+      upfrontCash: nonNegativeFinite(amounts.upfrontCash),
+    })
   }
   const standard = buildStandardSchedule(scenario, Math.max(0, loanAmount), monthlyOwnershipCost)
   const calculatedPayoffDay = toEpochDay(standard.schedule.at(-1)?.date ?? scenario.startDate)
