@@ -8,7 +8,7 @@ const downloadBlob = (blob: Blob, filename: string) => {
   document.body.append(anchor)
   anchor.click()
   anchor.remove()
-  URL.revokeObjectURL(url)
+  setTimeout(() => URL.revokeObjectURL(url), 0)
 }
 
 const csvCell = (value: string | number | boolean) => {
@@ -170,9 +170,15 @@ export const buildWorkbook = async (result: CalculationResult) => {
     { header: 'Date', key: 'date', width: 15 },
     { header: 'Type', key: 'type', width: 14 },
     { header: 'Amount', key: 'amount', width: 18 },
+    { header: 'Enabled', key: 'enabled', width: 12 },
   ]
   result.scenario.od.transactions.forEach((transaction) =>
-    transactions.addRow({ date: asDate(transaction.date), type: transaction.type, amount: transaction.amount }),
+    transactions.addRow({
+      date: asDate(transaction.date),
+      type: transaction.type,
+      amount: transaction.amount,
+      enabled: result.scenario.od.enabled && result.scenario.od.transactionsEnabled,
+    }),
   )
 
   for (const worksheet of workbook.worksheets) {

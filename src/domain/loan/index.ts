@@ -732,9 +732,17 @@ export const calculateLoan = (scenario: LoanScenario): CalculationResult => {
   }
 }
 
-export const formatCurrency = (value: number, maximumFractionDigits = 0) =>
-  new Intl.NumberFormat('en-IN', {
-    style: 'currency',
-    currency: 'INR',
-    maximumFractionDigits,
-  }).format(Number.isFinite(value) ? value : 0)
+const currencyFormatters = new Map<number, Intl.NumberFormat>()
+
+export const formatCurrency = (value: number, maximumFractionDigits = 0) => {
+  let formatter = currencyFormatters.get(maximumFractionDigits)
+  if (!formatter) {
+    formatter = new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: 'INR',
+      maximumFractionDigits,
+    })
+    currencyFormatters.set(maximumFractionDigits, formatter)
+  }
+  return formatter.format(Number.isFinite(value) ? value : 0)
+}
