@@ -80,6 +80,7 @@ a:focus-visible {
 
 .wordmark {
   display: flex;
+  min-height: 44px;
   gap: 12px;
   align-items: center;
   color: var(--ink);
@@ -154,11 +155,12 @@ h2 { margin: 8px 0 0; font-family: Iowan Old Style, Baskerville, Georgia, serif;
 h3 { margin: 8px 0 0; font-family: Iowan Old Style, Baskerville, Georgia, serif; font-size: clamp(24px, 2.5vw, 34px); font-weight: 500; letter-spacing: -0.025em; }
 
 .text-button, .add-button, .remove-button {
+  min-height: 44px;
   border: 0;
   background: none;
   color: var(--green);
   font-weight: 750;
-  padding: 8px 0;
+  padding: 10px 0;
   border-bottom: 1px solid currentColor;
 }
 .remove-button { color: var(--danger); align-self: end; margin-bottom: 5px; }
@@ -190,7 +192,7 @@ h3 { margin: 8px 0 0; font-family: Iowan Old Style, Baskerville, Georgia, serif;
 .field { display: grid; gap: 7px; }
 .field-label { font-size: 12px; font-weight: 750; color: #383d37; }
 .field small { min-height: 1.2em; font-size: 10px; line-height: 1.35; color: var(--muted); }
-.field .field-error, .mode-field .field-error { color: var(--danger); font-weight: 700; }
+.field-error { min-height: 0; color: var(--danger); font-weight: 700; }
 .field:has([aria-invalid="true"]) .input-shell { border-color: var(--danger); }
 .input-shell {
   min-height: 48px;
@@ -213,7 +215,7 @@ h3 { margin: 8px 0 0; font-family: Iowan Old Style, Baskerville, Georgia, serif;
 .mode-field[aria-invalid="true"] .segmented { border-color: var(--danger); }
 
 .segmented { display: inline-flex; justify-self: start; border: 1px solid #aaa89e; }
-.segmented button { min-height: 30px; padding: 5px 10px; border: 0; border-right: 1px solid #aaa89e; background: transparent; color: var(--muted); font-size: 10px; font-weight: 750; }
+.segmented button { min-width: 44px; min-height: 44px; padding: 5px 10px; border: 0; border-right: 1px solid #aaa89e; background: transparent; color: var(--muted); font-size: 10px; font-weight: 750; }
 .segmented button:last-child { border-right: 0; }
 .segmented button.active { background: var(--green); color: white; }
 
@@ -226,9 +228,9 @@ h3 { margin: 8px 0 0; font-family: Iowan Old Style, Baskerville, Georgia, serif;
 .switch-row > span:first-child { display: grid; gap: 5px; }
 .switch-row strong { font-size: 14px; }
 .switch-row small { color: var(--muted); line-height: 1.45; }
-.switch-control { position: relative; display: inline-block; width: 54px; height: 30px; flex: 0 0 auto; }
+.switch-control { position: relative; display: inline-block; width: 54px; height: 44px; flex: 0 0 auto; }
 .switch-control input { position: absolute; z-index: 2; opacity: 0; inset: 0; cursor: pointer; }
-.switch-control span { position: absolute; inset: 0; pointer-events: none; border: 1px solid #7e827c; background: #d9d5ca; transition: 160ms ease; }
+.switch-control span { position: absolute; inset: 7px 0; pointer-events: none; border: 1px solid #7e827c; background: #d9d5ca; transition: 160ms ease; }
 .switch-control span::after { content: ""; position: absolute; width: 20px; height: 20px; left: 4px; top: 4px; background: #fff; box-shadow: 0 2px 5px rgba(0,0,0,.2); transition: 160ms ease; }
 .switch-control input:checked + span { background: var(--green); border-color: var(--green); }
 .switch-control input:checked + span::after { transform: translateX(24px); }
@@ -260,7 +262,7 @@ dd { margin: 0; font-weight: 750; text-align: right; }
 .action-grid button:first-child { background: var(--ink); color: white; }
 .action-grid button:disabled { opacity: .4; cursor: not-allowed; }
 .status { min-height: 1.5em; color: var(--muted); font-size: 11px; line-height: 1.45; }
-.shared-notice { margin: 20px 0; padding: 14px; border-left: 4px solid var(--orange); background: #eee6bd; font-size: 12px; line-height: 1.5; }
+.shared-notice { margin: 20px 0 24px; padding: 14px; border-left: 4px solid var(--orange); background: #eee6bd; font-size: 12px; line-height: 1.5; }
 
 .totals-band { display: grid; grid-template-columns: repeat(3, 1fr); border-bottom: 1px solid var(--ink); }
 .totals-band > div { padding: 34px clamp(20px, 4vw, 56px); border-right: 1px solid var(--ink); }
