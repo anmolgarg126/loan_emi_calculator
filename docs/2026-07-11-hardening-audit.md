@@ -43,6 +43,8 @@ The destructive release gate ran from `/tmp/loan-hardening-audit-ed64e45`, creat
 | `VITE_BASE_PATH=/loan_emi_calculator/ VITE_SITE_URL=https://owner.github.io/loan_emi_calculator/ npm run build` | Pass |
 | `VITE_BASE_PATH=/loan_emi_calculator/ VITE_SITE_URL=https://owner.github.io/loan_emi_calculator/ npm run test:e2e` | Pass; 75/75 from the Pages subpath |
 
+After the final whole-branch review corrected the derived-principal ceiling and XLSX assumption formats in `e7f1211`, the release gates were repeated from a fresh `git archive` of that commit in `/tmp/loan-hardening-final-hhtzZU` with the same pinned Node/npm toolchain. `npm ci --ignore-scripts` again installed 282 packages with 0 vulnerabilities; `npm run verify` passed lint, type-check, 84 unit tests, and the production build; the root browser matrix passed 75/75; and the exact Pages-subpath build and browser matrix passed 75/75. The initial application payload at this final HEAD was 75.11 kB JavaScript plus 4.24 kB CSS gzip; ExcelJS remained a separate user-triggered 256.47 kB gzip chunk.
+
 ### Supported-maximum performance
 
 The benchmark used the committed fixtures in `src/domain/loan/loan.test.ts`: `defaultScenario()`; the maximum supported OD scenario (`₹1,000,000,000`, 0 down payment in amount mode, 50% annual rate, 480 months, `2026-01-01`, OD enabled); and the 480-month scenario with 100 yearly ₹1 recurring prepayments starting at the committed four-month offsets. Under Node 24.18.0, each fixture ran once as an unmeasured warm-up and then 25 times in one process. Each sample wrapped only `calculateLoan(scenario)` with `performance.now()` from `node:perf_hooks`; the median is the 13th sorted sample and the maximum is the largest sample.
