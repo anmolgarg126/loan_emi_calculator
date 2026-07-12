@@ -161,6 +161,39 @@ describe('Generic calculator', () => {
     else expect(changed.payment).toBe(calculateEmi(before.balance, annualRate, 10))
   })
 
+  it('uses a first-date keep-tenure reset EMI as the headline', () => {
+    const startDate = '2026-01-01'
+    const result = calculateSuite(genericWith({
+      principal: 120_000,
+      annualRate: 12,
+      tenureMonths: 12,
+      startDate,
+      rateChanges: [{ id: 'opening-reset', date: startDate, annualRate: 24, mode: 'keep-tenure' }],
+    }))
+
+    expect(result.view.errors).toEqual([])
+    expect(result.view.schedule[0]).toMatchObject({ date: startDate, interest: 2_400, payment: 11_347.15 })
+    expect(result.native.initialEmi).toBe(result.view.schedule[0]!.payment)
+    expect(result.view.primary.value).toBe(result.view.schedule[0]!.payment)
+  })
+
+  it('preserves the original EMI for a first-date keep-EMI reset', () => {
+    const startDate = '2026-01-01'
+    const preservedEmi = calculateEmi(120_000, 12, 12)
+    const result = calculateSuite(genericWith({
+      principal: 120_000,
+      annualRate: 12,
+      tenureMonths: 12,
+      startDate,
+      rateChanges: [{ id: 'opening-reset', date: startDate, annualRate: 24, mode: 'keep-emi' }],
+    }))
+
+    expect(result.view.errors).toEqual([])
+    expect(result.view.schedule[0]).toMatchObject({ date: startDate, interest: 2_400, payment: preservedEmi })
+    expect(result.native.initialEmi).toBe(preservedEmi)
+    expect(result.view.primary.value).toBe(result.view.schedule[0]!.payment)
+  })
+
   it('accepts events on the first EMI date and rejects dates before it', () => {
     const startDate = '2026-01-01'
     const valid = calculateSuite(genericWith({

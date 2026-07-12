@@ -204,7 +204,7 @@ export const calculateGeneric = (scenario: GenericScenario): Extract<SuiteResult
   const totalInterest = roundMoney(amortization.totalInterest)
   const totalRepayment = roundMoney(scenario.principal + totalInterest + scenario.processingFee)
   const native: GenericResult = {
-    initialEmi: amortization.initialEmi,
+    initialEmi: schedule[0]?.payment ?? amortization.initialEmi,
     totalInterest,
     totalRepayment,
     payoffDate: schedule.at(-1)?.date ?? scenario.startDate,
