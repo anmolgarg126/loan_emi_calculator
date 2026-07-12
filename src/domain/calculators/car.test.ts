@@ -42,6 +42,44 @@ describe('car calculator', () => {
     })).financedPrincipal).toBe(1_000_000)
   })
 
+  it('accepts a derived financed principal at exactly ₹1 billion', () => {
+    const result = calculateCar(carWith({
+      vehiclePrice: 999_999_999,
+      downPayment: 0,
+      downPaymentMode: 'amount',
+      registrationFees: 0.5,
+      financeRegistrationFees: true,
+      financedInsurance: 0.5,
+    }))
+
+    expect(result.errors).toEqual([])
+    expect(result.financedPrincipal).toBe(1_000_000_000)
+    expect(result.schedule.length).toBeGreaterThan(0)
+  })
+
+  it('rejects a derived financed principal above ₹1 billion', () => {
+    const result = calculateCar(carWith({
+      vehiclePrice: 999_999_999,
+      downPayment: 0,
+      downPaymentMode: 'amount',
+      registrationFees: 0.5,
+      financeRegistrationFees: true,
+      financedInsurance: 0.51,
+    }))
+
+    expect(result.issues).toContainEqual({
+      field: 'financedPrincipal',
+      message: 'Financed principal must be above ₹0 and at most ₹100 crore.',
+    })
+    expect(result.schedule).toEqual([])
+    expect([
+      result.financedPrincipal,
+      result.initialEmi,
+      result.totalInterest,
+      result.cashOutflowThroughHorizon,
+    ].every(Number.isFinite)).toBe(true)
+  })
+
   it('accounts for financed and unfinanced registration without double counting', () => {
     const base = {
       vehiclePrice: 100_000,

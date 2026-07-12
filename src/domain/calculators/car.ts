@@ -132,6 +132,12 @@ export const calculateCar = (scenario: CarScenario): CarResult => {
       + (scenario.financeRegistrationFees ? scenario.registrationFees : 0)
       + scenario.financedInsurance,
   )
+  if (!Number.isFinite(financedPrincipal) || financedPrincipal <= 0 || financedPrincipal > MAX_MONEY) {
+    return invalidResult(scenario, [{
+      field: 'financedPrincipal',
+      message: 'Financed principal must be above ₹0 and at most ₹100 crore.',
+    }])
+  }
   if (scenario.balloonAmount >= financedPrincipal) {
     return invalidResult(scenario, [{ field: 'balloonAmount', message: 'Balloon amount must be below the financed principal.' }])
   }
