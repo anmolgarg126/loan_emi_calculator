@@ -86,6 +86,54 @@ export interface PersonalResult {
   warnings: string[]
 }
 
+export interface EducationDisbursement {
+  id: string
+  date: string
+  amount: number
+}
+
+export interface EducationScenario {
+  courseCost: number
+  ownContribution: number
+  disbursements: EducationDisbursement[]
+  studyAnnualRate: number
+  studyMonths: number
+  moratoriumMonths: number
+  servicingMode: 'none' | 'full-interest' | 'fixed-monthly'
+  servicingAmount: number
+  repaymentAnnualRate: number
+  repaymentTenureMonths: number
+  startDate: string
+  processingFee: number
+  prepayments: Prepayment[]
+}
+
+export interface EducationPhaseRow {
+  date: string
+  phase: 'study' | 'moratorium' | 'repayment-start'
+  disbursement: number
+  payment: number
+  outstandingPrincipal: number
+  accruedInterest: number
+}
+
+export interface EducationResult {
+  totalDisbursed: number
+  servicedInterest: number
+  capitalizedInterest: number
+  repaymentPrincipal: number
+  initialEmi: number
+  repaymentInterest: number
+  totalCost: number
+  repaymentStartDate: string
+  payoffDate: string
+  phaseRows: EducationPhaseRow[]
+  schedule: UnifiedScheduleRow[]
+  issues: ValidationIssue[]
+  errors: string[]
+  warnings: string[]
+}
+
 export interface ViewMetric {
   id: string
   label: string
@@ -119,9 +167,11 @@ export type SuiteScenario =
   | { kind: 'home'; value: LoanScenario }
   | { kind: 'car'; value: CarScenario }
   | { kind: 'personal'; value: PersonalScenario }
+  | { kind: 'education'; value: EducationScenario }
 
 export type SuiteResult =
   | { kind: 'generic'; scenario: GenericScenario; view: UnifiedViewResult; native: import('./generic').GenericResult }
   | { kind: 'home'; scenario: LoanScenario; view: UnifiedViewResult; native: CalculationResult }
   | { kind: 'car'; scenario: CarScenario; view: UnifiedViewResult; native: CarResult }
   | { kind: 'personal'; scenario: PersonalScenario; view: UnifiedViewResult; native: PersonalResult }
+  | { kind: 'education'; scenario: EducationScenario; view: UnifiedViewResult; native: EducationResult }
