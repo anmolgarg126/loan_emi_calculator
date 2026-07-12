@@ -10,6 +10,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "clean": "node -e \"const fs=require('node:fs');for(const path of ['dist','out','build','coverage','.nyc_output','playwright-report','test-results','.vite','.cache','.turbo','.eslintcache'])fs.rmSync(path,{recursive:true,force:true});for(const file of fs.readdirSync('.'))if(file.endsWith('.tsbuildinfo'))fs.rmSync(file,{force:true})\"",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "lint": "eslint .",

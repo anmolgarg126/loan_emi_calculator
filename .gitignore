@@ -8,6 +8,7 @@ out/
 dist/
 build/
 coverage/
+.nyc_output/
 playwright-report/
 test-results/
 
@@ -37,5 +38,6 @@ pnpm-debug.log*
 # TypeScript and tooling caches
 *.tsbuildinfo
 .eslintcache
+.vite/
 .turbo/
 .cache/

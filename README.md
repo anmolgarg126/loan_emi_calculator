@@ -34,6 +34,14 @@ npm run dev
 
 Open the local URL printed by Vite.
 
+## Clean generated files
+
+```sh
+npm run clean
+```
+
+This removes build output, coverage, browser-test reports, TypeScript build metadata, and local tool caches. It deliberately preserves `node_modules`, environment files, source files, Git data, worktrees, and browser storage.
+
 ## Verify
 
 ```sh
