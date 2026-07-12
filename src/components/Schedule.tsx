@@ -23,7 +23,7 @@ function YearSchedule({ group, initiallyOpen, selectedPeriod, granularity, onSel
   const interest = group.rows.reduce((sum, row) => sum + row.interest, 0)
   const balance = group.rows.at(-1)?.balance ?? 0
   return <details ref={ref} open={open || selected} onToggle={(event) => setOpen(event.currentTarget.open)}>
-    <summary onFocus={() => onSelectPeriod(group.year)}>
+    <summary>
       <span className="year-label">{group.year}</span>
       <span><small>Principal</small><strong>{formatCurrency(principal)}</strong></span>
       <span><small>Interest</small><strong>{formatCurrency(interest)}</strong></span>

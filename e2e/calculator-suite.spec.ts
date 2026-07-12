@@ -35,7 +35,7 @@ test('resets and restores the calculator through undo', async ({ page }) => {
 for (const tool of ['Affordability', 'Prepayment', 'Tenure', 'Interest rate'] as const) {
   test(`${tool} solver opens with a live result`, async ({ page }) => {
     await page.goto('./')
-    await page.getByRole('button', { name: tool }).click()
+    await page.getByRole('button', { name: tool, exact: true }).click()
     await expect(page.getByRole('heading', { name: new RegExp(`${tool} solver`, 'i') })).toBeVisible()
     await expect(page.locator('.solver-answer')).toBeVisible()
     await page.getByRole('button', { name: 'Close solver' }).click()

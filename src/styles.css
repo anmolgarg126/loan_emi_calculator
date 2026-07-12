@@ -206,8 +206,8 @@ th:first-child, td:first-child { text-align: left; }
 .solver-answer.error { background: var(--danger-soft); color: var(--danger); }
 
 @media (max-width: 900px) {
-  .app-header { position: relative; }
-  .privacy-status { display: none; }
+  .app-header { position: relative; flex-wrap: wrap; }
+  .privacy-status { width: 100%; justify-content: flex-start; }
   .app-intro { align-items: start; flex-direction: column; }
   .privacy-facts { justify-content: start; }
   .workspace { grid-template-columns: 1fr; }
