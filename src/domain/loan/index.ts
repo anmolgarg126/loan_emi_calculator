@@ -1,3 +1,13 @@
+import {
+  buildAmortizationSchedule,
+  cycleIndex,
+  fromEpochDay,
+  roundMoney,
+  toEpochDay,
+} from '../amortization'
+
+export { addMonths, calculateEmi, cycleIndex, fromEpochDay, roundMoney, toEpochDay } from '../amortization'
+
 export type MoneyMode = 'amount' | 'percent'
 export type RateResetMode = 'keep-emi' | 'keep-tenure'
 export type PrepaymentFrequency = 'monthly' | 'quarterly' | 'yearly' | 'once'
@@ -124,68 +134,10 @@ export interface CalculationResult {
   errors: string[]
 }
 
-const DAY_MS = 86_400_000
 const MAX_MONEY = 1_000_000_000
-const MAX_MONTHS = 600
-
-export const roundMoney = (value: number) => {
-  const scaled = value * 100
-  const tolerance = Number.EPSILON * Math.max(1, Math.abs(scaled))
-  return (scaled >= 0
-    ? Math.floor(scaled + 0.5 + tolerance)
-    : Math.ceil(scaled - 0.5 - tolerance)) / 100
-}
 
 export const amountFromMode = (value: number, mode: MoneyMode, base: number) =>
   roundMoney(mode === 'percent' ? (base * value) / 100 : value)
-
-export const toEpochDay = (date: string) => {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date)
-  if (!match) return Number.NaN
-  const year = Number(match[1])
-  const month = Number(match[2])
-  const day = Number(match[3])
-  const timestamp = Date.UTC(year, month - 1, day)
-  const parsed = new Date(timestamp)
-  if (parsed.getUTCFullYear() !== year || parsed.getUTCMonth() !== month - 1 || parsed.getUTCDate() !== day) {
-    return Number.NaN
-  }
-  return Math.floor(timestamp / DAY_MS)
-}
-
-export const fromEpochDay = (day: number) => new Date(day * DAY_MS).toISOString().slice(0, 10)
-
-export const addMonths = (date: string, months: number) => {
-  const epoch = toEpochDay(date)
-  if (!Number.isFinite(epoch)) return ''
-  const source = new Date(epoch * DAY_MS)
-  const targetMonth = source.getUTCMonth() + months
-  const targetYear = source.getUTCFullYear() + Math.floor(targetMonth / 12)
-  const normalizedMonth = ((targetMonth % 12) + 12) % 12
-  const lastDay = new Date(Date.UTC(targetYear, normalizedMonth + 1, 0)).getUTCDate()
-  return new Date(Date.UTC(targetYear, normalizedMonth, Math.min(source.getUTCDate(), lastDay)))
-    .toISOString()
-    .slice(0, 10)
-}
-
-export const cycleIndex = (startDate: string, candidate: string): number | null => {
-  const startDay = toEpochDay(startDate)
-  const candidateDay = toEpochDay(candidate)
-  if (!Number.isFinite(startDay) || !Number.isFinite(candidateDay) || candidateDay < startDay) return null
-  const start = new Date(startDay * DAY_MS)
-  const target = new Date(candidateDay * DAY_MS)
-  const index = (target.getUTCFullYear() - start.getUTCFullYear()) * 12
-    + target.getUTCMonth() - start.getUTCMonth()
-  return index <= MAX_MONTHS && addMonths(startDate, index) === candidate ? index : null
-}
-
-export const calculateEmi = (principal: number, annualRate: number, months: number) => {
-  if (principal <= 0 || months <= 0) return 0
-  const monthlyRate = annualRate / 1200
-  if (monthlyRate === 0) return roundMoney(principal / months)
-  const factor = (1 + monthlyRate) ** months
-  return roundMoney((principal * monthlyRate * factor) / (factor - 1))
-}
 
 const nextMonthStart = () => {
   const now = new Date()
@@ -225,16 +177,6 @@ export const defaultScenario = (): LoanScenario => ({
 })
 
 const isCycleDate = (startDate: string, candidate: string) => cycleIndex(startDate, candidate) !== null
-
-const prepaymentDue = (item: Prepayment, paymentCycle: number, startCycle: number) => {
-  const delta = paymentCycle - startCycle
-  if (delta < 0) return false
-  const interval = item.frequency === 'once' ? 0
-    : item.frequency === 'monthly' ? 1
-      : item.frequency === 'quarterly' ? 3
-        : 12
-  return interval === 0 ? delta === 0 : delta % interval === 0
-}
 
 const duplicates = <T>(items: T[], key: (item: T) => string) => {
   const seen = new Set<string>()
@@ -403,65 +345,6 @@ export const validateScenario = (scenario: LoanScenario): ValidationIssue[] => {
   const loanAmount = roundMoney(scenario.homeValue + scenario.loanInsurance - downPayment)
   if (Number.isFinite(loanAmount) && loanAmount <= 0) addIssue('loanAmount', 'Loan amount must remain above ₹0 after down payment.')
   return issues
-}
-
-const buildStandardSchedule = (scenario: LoanScenario, loanAmount: number, monthlyOwnershipCost: number) => {
-  const errors: string[] = []
-  const schedule: ScheduleRow[] = []
-  const changes = new Map(scenario.rateChanges.map((change) => [change.date, change]))
-  const prepayments = scenario.prepayments
-    .map((item) => ({ item, startCycle: cycleIndex(scenario.startDate, item.date) }))
-    .filter((entry): entry is { item: Prepayment, startCycle: number } => entry.startCycle !== null)
-  let annualRate = scenario.annualRate
-  let balance = loanAmount
-  let emi = calculateEmi(balance, annualRate, scenario.tenureMonths)
-  const initialEmi = emi
-  let extensionAllowed = false
-
-  for (let month = 0; month < MAX_MONTHS && balance > 0.005; month += 1) {
-    const periodStart = addMonths(scenario.startDate, month)
-    const paymentDate = addMonths(scenario.startDate, month + 1)
-    const change = changes.get(periodStart)
-    if (change) {
-      annualRate = change.annualRate
-      extensionAllowed = change.mode === 'keep-emi'
-      if (change.mode === 'keep-tenure') {
-        const remaining = Math.max(1, scenario.tenureMonths - month)
-        emi = calculateEmi(balance, annualRate, remaining)
-      }
-    }
-
-    const interest = roundMoney(balance * (annualRate / 1200))
-    if (emi <= interest && balance > emi) {
-      errors.push(`EMI is insufficient after the rate change effective ${periodStart}. Minimum EMI is ${roundMoney(interest + 0.01)}.`)
-      break
-    }
-    const isFinalFixedTenurePayment = !extensionAllowed && month === scenario.tenureMonths - 1
-    const principal = roundMoney(
-      isFinalFixedTenurePayment ? balance : Math.min(balance, Math.max(0, emi - interest)),
-    )
-    const duePrepayment = roundMoney(
-      prepayments
-        .filter(({ item, startCycle }) => prepaymentDue(item, month + 1, startCycle))
-        .reduce((sum, { item }) => sum + item.amount, 0),
-    )
-    const prepayment = roundMoney(Math.min(Math.max(0, balance - principal), duePrepayment))
-    balance = roundMoney(Math.max(0, balance - principal - prepayment))
-    schedule.push({
-      month: month + 1,
-      date: paymentDate,
-      annualRate,
-      emi: roundMoney(interest + principal),
-      principal,
-      interest,
-      prepayment,
-      balance,
-      ownershipCost: monthlyOwnershipCost,
-    })
-  }
-
-  if (balance > 0.005 && errors.length === 0) errors.push('The loan did not amortize within the 600-month calculation limit.')
-  return { schedule, errors, initialEmi }
 }
 
 const buildOdSchedule = (
@@ -679,7 +562,19 @@ export const calculateLoan = (scenario: LoanScenario): CalculationResult => {
       upfrontCash: nonNegativeFinite(amounts.upfrontCash),
     })
   }
-  const standard = buildStandardSchedule(scenario, Math.max(0, loanAmount), monthlyOwnershipCost)
+  const amortization = buildAmortizationSchedule({
+    principal: Math.max(0, loanAmount),
+    annualRate: scenario.annualRate,
+    tenureMonths: scenario.tenureMonths,
+    startDate: scenario.startDate,
+    prepayments: scenario.prepayments,
+    rateChanges: scenario.rateChanges,
+    balloonAmount: 0,
+  })
+  const standard = {
+    ...amortization,
+    schedule: amortization.rows.map<ScheduleRow>((row) => ({ ...row, ownershipCost: monthlyOwnershipCost })),
+  }
   const calculatedPayoffDay = toEpochDay(standard.schedule.at(-1)?.date ?? scenario.startDate)
   const postPayoffErrors = scenario.od.enabled && scenario.od.transactionsEnabled
     ? scenario.od.transactions
