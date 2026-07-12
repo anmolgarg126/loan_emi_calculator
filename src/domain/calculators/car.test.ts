@@ -261,6 +261,25 @@ describe('car calculator', () => {
     expect(result.initialEmi).toBe(result.schedule[0]?.payment)
   })
 
+  it('rejects events after the actual payoff date', () => {
+    const startDate = '2026-01-01'
+    const afterPayoff = addMonths(startDate, 12)
+    const result = calculateCar(carWith({
+      annualRate: 0,
+      tenureMonths: 12,
+      ownershipMonths: 12,
+      startDate,
+      prepayments: [{ id: 'late-extra', date: afterPayoff, amount: 1_000, frequency: 'once' }],
+      rateChanges: [{ id: 'late-reset', date: afterPayoff, annualRate: 12, mode: 'keep-tenure' }],
+    }))
+
+    expect(result.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ field: 'prepayments.late-extra.date' }),
+      expect.objectContaining({ field: 'rateChanges.late-reset.date' }),
+    ]))
+    expect(result.schedule).toEqual([])
+  })
+
   it('blocks an infeasible engine schedule without exposing partial rows', () => {
     const startDate = '2026-01-01'
     const date = addMonths(startDate, 1)

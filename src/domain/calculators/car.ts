@@ -171,6 +171,18 @@ export const calculateCar = (scenario: CarScenario): CarResult => {
     return invalidResult(scenario, errors.map((message) => ({ field: 'scenario', message })), amortization.warnings)
   }
 
+  scenario.prepayments.forEach((item, index) => {
+    if ((cycleIndex(scenario.startDate, item.date) ?? -1) >= amortization.rows.length) {
+      add(itemField('prepayments', item.id, index, 'date'), 'Prepayment must not be after the loan payoff date.')
+    }
+  })
+  scenario.rateChanges.forEach((item, index) => {
+    if ((cycleIndex(scenario.startDate, item.date) ?? -1) >= amortization.rows.length) {
+      add(itemField('rateChanges', item.id, index, 'date'), 'Rate change must not be after the loan payoff date.')
+    }
+  })
+  if (issues.length > 0) return invalidResult(scenario, issues, amortization.warnings)
+
   const schedule = amortization.rows.map<UnifiedScheduleRow>((row) => ({
     period: row.month,
     date: addMonths(scenario.startDate, row.month - 1),
