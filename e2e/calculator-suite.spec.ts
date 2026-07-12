@@ -53,7 +53,7 @@ test('solver reports impossible combinations inline', async ({ page }) => {
 test('replaces zero amounts and formats them after editing', async ({ page }) => {
   await page.goto('./?calculator=generic')
   await page.getByText('Fees', { exact: true }).click()
-  const fee = page.getByLabel('Processing fee')
+  const fee = page.getByLabel('Processing fee', { exact: true })
   await fee.click()
   await page.keyboard.type('343')
   await fee.blur()
@@ -67,4 +67,21 @@ test('replaces zero amounts and formats them after editing', async ({ page }) =>
   await emi.blur()
   await expect(emi).toHaveValue('1,00,000')
   await expect(page.locator('#solver-emi-amount')).toHaveText('₹1,00,000 · One lakh rupees')
+})
+
+test('shows rupee words for percentage-based amount fields', async ({ page }) => {
+  await page.goto('./?calculator=home')
+  await expect(page.locator('#down-payment-amount')).toHaveText('Equivalent: ₹10,00,000 · Ten lakh rupees')
+  await expect(page.locator('#interest-rate-amount')).toHaveCount(0)
+
+  await page.getByRole('tab', { name: 'Car' }).click()
+  await expect(page.locator('#car-down-payment-amount')).toHaveText('Equivalent: ₹2,00,000 · Two lakh rupees')
+
+  await page.getByRole('tab', { name: 'Personal' }).click()
+  await page.getByText('Upfront deductions', { exact: true }).click()
+  await page.getByRole('button', { name: '% of principal' }).click()
+  const fee = page.getByLabel('Processing fee', { exact: true })
+  await fee.fill('2')
+  await fee.blur()
+  await expect(page.locator('#personal-fee-amount')).toHaveText('Equivalent: ₹10,000 · Ten thousand rupees')
 })

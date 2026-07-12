@@ -9,6 +9,9 @@ export function PersonalForm({ scenario, onChange, issueFor }: {
   issueFor: (field: string) => string | undefined
 }) {
   const set = <K extends keyof PersonalScenario>(key: K, value: PersonalScenario[K]) => onChange({ ...scenario, [key]: value })
+  const processingFeeAmount = scenario.processingFeeMode === 'percent' && scenario.principal > 0
+    ? (scenario.processingFee * scenario.principal) / 100
+    : undefined
   return <div className="guided-form">
     <GuidedSection step={1} title="Personal loan essentials" description="Requested amount, lender quote, and repayment term" open>
       <div className="field-grid">
@@ -21,7 +24,7 @@ export function PersonalForm({ scenario, onChange, issueFor }: {
     </GuidedSection>
     <GuidedSection step={2} title="Upfront deductions" description="See the amount you actually receive" optional configured={scenario.processingFee + scenario.insuranceDeduction + scenario.otherDeduction > 0}>
       <div className="field-grid">
-        <div className="field-with-mode"><NumberField id="personal-fee" label="Processing fee" value={scenario.processingFee} onChange={(value) => set('processingFee', value)} prefix={scenario.processingFeeMode === 'amount' ? '₹' : undefined} suffix={scenario.processingFeeMode === 'percent' ? '%' : undefined} error={issueFor('processingFee')} /><ModeToggle id="personal-fee-mode" value={scenario.processingFeeMode} onChange={(value) => set('processingFeeMode', value)} percentLabel="% of principal" error={issueFor('processingFeeMode')} /></div>
+        <div className="field-with-mode"><NumberField id="personal-fee" label="Processing fee" value={scenario.processingFee} onChange={(value) => set('processingFee', value)} prefix={scenario.processingFeeMode === 'amount' ? '₹' : undefined} suffix={scenario.processingFeeMode === 'percent' ? '%' : undefined} amountValue={processingFeeAmount} equivalentAmount={scenario.processingFeeMode === 'percent'} error={issueFor('processingFee')} /><ModeToggle id="personal-fee-mode" value={scenario.processingFeeMode} onChange={(value) => set('processingFeeMode', value)} percentLabel="% of principal" error={issueFor('processingFeeMode')} /></div>
         <NumberField id="gst-rate" label="GST on processing fee" value={scenario.gstRate} onChange={(value) => set('gstRate', value)} suffix="%" max={100} step={0.01} error={issueFor('gstRate')} />
         <NumberField id="insurance-deduction" label="Insurance deduction" value={scenario.insuranceDeduction} onChange={(value) => set('insuranceDeduction', value)} prefix="₹" error={issueFor('insuranceDeduction')} />
         <NumberField id="other-deduction" label="Other deducted charges" value={scenario.otherDeduction} onChange={(value) => set('otherDeduction', value)} prefix="₹" error={issueFor('otherDeduction')} />

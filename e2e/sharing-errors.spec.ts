@@ -26,7 +26,7 @@ test('round-trips a generated v2 fragment in a new browser context', async ({ pa
   const context = await browser.newContext()
   const sharedPage = await context.newPage()
   await sharedPage.goto(url!.replace(new URL(url!).origin, new URL(baseURL!).origin))
-  await expect(sharedPage.getByLabel('Vehicle price')).toHaveValue('7654321')
+  await expect(sharedPage.getByLabel('Vehicle price')).toHaveValue('76,54,321')
   await expect(sharedPage.getByText(/Loaded from a shared link/).first()).toBeVisible()
   await context.close()
 })
@@ -40,7 +40,7 @@ test('recovers from malformed state and disables data actions for invalid input'
     await expect(page.getByRole('button', { name })).toBeDisabled()
   }
   await page.getByRole('button', { name: 'Reset calculator' }).click()
-  await expect(page.getByLabel('Loan principal')).toHaveValue('1000000')
+  await expect(page.getByLabel('Loan principal')).toHaveValue('10,00,000')
   await expect(page.getByRole('button', { name: 'Copy share link' })).toBeEnabled()
 })
 

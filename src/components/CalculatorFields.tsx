@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { useRef, useState, type ReactNode } from 'react'
 import { flushSync } from 'react-dom'
 import type { MoneyMode } from '../domain/loan'
 import { formatAmountHelper, formatIndianAmountInput, parseNumericDraft } from '../lib/indian-amount'
@@ -24,6 +24,7 @@ export function NumberField({
   equivalentAmount?: boolean
 }) {
   const [draft, setDraft] = useState<string | null>(null)
+  const selectOnMouseUp = useRef(false)
   const monetary = prefix === '₹'
   const parsedDraft = draft === null ? value : parseNumericDraft(draft)
   const resolvedAmount = parsedDraft === null ? undefined : amountValue ?? (monetary ? parsedDraft : undefined)
@@ -32,6 +33,7 @@ export function NumberField({
   const describedBy = [amountHelper && `${id}-amount`, hint && `${id}-hint`, error && `${id}-error`].filter(Boolean).join(' ') || undefined
   const startEditing = (input: HTMLInputElement) => {
     flushSync(() => setDraft(Number.isFinite(value) ? String(value) : ''))
+    selectOnMouseUp.current = true
     input.select()
   }
   const edit = (next: string) => {
@@ -62,6 +64,12 @@ export function NumberField({
           aria-describedby={describedBy}
           aria-invalid={Boolean(error)}
           onFocus={(event) => startEditing(event.currentTarget)}
+          onMouseUp={(event) => {
+            if (!selectOnMouseUp.current) return
+            event.preventDefault()
+            selectOnMouseUp.current = false
+            event.currentTarget.select()
+          }}
           onChange={(event) => edit(event.target.value)}
           onBlur={finishEditing}
         />
