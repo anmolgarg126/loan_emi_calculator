@@ -18,6 +18,8 @@ The redesigned product must:
 - remain fully client-side and independently isolated in each open browser tab;
 - keep the existing accuracy, accessibility, performance, export, and GitHub Pages guarantees.
 
+Amount-input editing and Indian formatting are further specified by `2026-07-12-indian-amount-inputs-design.md`. Monetary inputs use Indian digit grouping outside active editing, may be cleared without a persistent leading zero, and expose readable rupee words. Percentage-based amount inputs show their calculated rupee equivalent and words; pure rates and tenures do not.
+
 ## 2. Approved design direction
 
 The visual direction combines:
