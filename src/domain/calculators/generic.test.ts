@@ -115,6 +115,35 @@ describe('Generic calculator', () => {
     expect(keepTenure.view.schedule[12]?.payment).toBeLessThan(baseline.view.schedule[12]!.payment)
   })
 
+  it('blocks partial schedules when a valid scenario becomes infeasible', () => {
+    const base = defaultSuiteScenario('generic').value
+    const result = calculateSuite(genericWith({
+      rateChanges: [{
+        id: 'payment-shock',
+        date: addMonths(base.startDate, 1),
+        annualRate: 50,
+        mode: 'keep-emi',
+      }],
+    }))
+
+    expect(result.view.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ field: 'scenario' }),
+    ]))
+    expect(result.view.errors.length).toBeGreaterThan(0)
+    expect(result.native.schedule).toEqual([])
+    expect(result.view.schedule).toEqual([])
+    expect([
+      result.native.initialEmi,
+      result.native.totalInterest,
+      result.native.totalRepayment,
+      result.view.primary.value,
+    ].every((value) => typeof value === 'number' && Number.isFinite(value))).toBe(true)
+    expect(result.native.initialEmi).toBe(0)
+    expect(result.native.totalInterest).toBe(0)
+    expect(result.native.totalRepayment).toBe(0)
+    expect(result.native.payoffDate).toBe(base.startDate)
+  })
+
   it('normalizes schedule rows and includes the processing fee in repayment', () => {
     const scenario = genericWith({ processingFee: 1_234.56 })
     const result = calculateSuite(scenario)

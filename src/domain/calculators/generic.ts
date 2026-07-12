@@ -120,7 +120,11 @@ const validateGeneric = (scenario: GenericScenario): ValidationIssue[] => {
   return issues
 }
 
-const emptyView = (scenario: GenericScenario, issues: ValidationIssue[]): UnifiedViewResult => ({
+const emptyView = (
+  scenario: GenericScenario,
+  issues: ValidationIssue[],
+  warnings: string[] = [],
+): UnifiedViewResult => ({
   primary: { id: 'monthly-emi', label: 'Monthly EMI', value: 0, format: 'currency' },
   metrics: [
     { id: 'principal', label: 'Principal', value: Number.isFinite(scenario.principal) ? scenario.principal : 0, format: 'currency' },
@@ -132,22 +136,35 @@ const emptyView = (scenario: GenericScenario, issues: ValidationIssue[]): Unifie
   schedule: [],
   issues,
   errors: issues.map(({ message }) => message),
-  warnings: [],
+  warnings,
 })
+
+const blockingResult = (
+  scenario: GenericScenario,
+  issues: ValidationIssue[],
+  warnings: string[] = [],
+): Extract<SuiteResult, { kind: 'generic' }> => {
+  const view = emptyView(scenario, issues, warnings)
+  return {
+    kind: 'generic',
+    scenario,
+    view,
+    native: { initialEmi: 0, totalInterest: 0, totalRepayment: 0, payoffDate: scenario.startDate, schedule: [] },
+  }
+}
 
 export const calculateGeneric = (scenario: GenericScenario): Extract<SuiteResult, { kind: 'generic' }> => {
   const validationIssues = validateGeneric(scenario)
-  if (validationIssues.length > 0) {
-    const view = emptyView(scenario, validationIssues)
-    return {
-      kind: 'generic',
-      scenario,
-      view,
-      native: { initialEmi: 0, totalInterest: 0, totalRepayment: 0, payoffDate: scenario.startDate, schedule: view.schedule },
-    }
-  }
+  if (validationIssues.length > 0) return blockingResult(scenario, validationIssues)
 
   const amortization = buildAmortizationSchedule({ ...scenario, balloonAmount: 0 })
+  if (amortization.errors.length > 0) {
+    return blockingResult(
+      scenario,
+      amortization.errors.map((message) => ({ field: 'scenario', message })),
+      amortization.warnings,
+    )
+  }
   const schedule = amortization.rows.map<UnifiedScheduleRow>((row) => ({
     period: row.month,
     date: row.date,
