@@ -14,8 +14,13 @@ Every input and calculation stays in the current browser tab. The app has no bac
 - Education loan with dated disbursements, study/moratorium accrual, interest servicing, capitalization, and repayment.
 - Affordability, tenure, interest-rate, and prepayment solvers.
 - Interactive yearly/monthly graph linked to the schedule, with series controls, ranges, OD comparison, keyboard navigation, and touch tooltips.
+- Replaceable amount inputs with Indian lakh/crore grouping and compact rupee words; percentage-based amounts show their calculated rupee equivalent.
 - Full-calculator reset with a 10-second undo; explicit remember, restore, and confirmed delete on the current device.
 - Print/PDF, machine-readable CSV, and XLSX with native date, number, percentage, integer, and Boolean cells.
+
+### Editing amounts
+
+Monetary inputs show Indian grouping such as `1,23,45,678` when not being edited. Focusing a field selects its current value and temporarily shows plain digits for predictable cursor editing, so replacing zero never produces a leading `0`. Clearing a field is allowed; leaving it empty commits zero on blur. A small line below each amount spells out the rupee value, while percentage-based amount fields show the calculated rupee equivalent. Pure rates and month counts remain ordinary numeric fields.
 
 ## Run locally
 
