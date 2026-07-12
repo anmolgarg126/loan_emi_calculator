@@ -1,10 +1,25 @@
-# Loan Ledger
+# Loan EMI Calculator
 
-A lender-neutral Indian home-loan EMI and overdraft calculator. It models monthly-reducing EMI, dated rate changes and prepayments, daily OD interest, ownership costs, amortization, and typed exports without sending financial inputs to a backend.
+A lender-neutral, privacy-first loan planning suite for Generic, Home, Car, Personal, and Education loans. It includes four reverse solvers, prepayments and rate changes, a detailed Home Loan overdraft model, an interactive payment graph, amortization schedules, and typed exports.
+
+Every input and calculation stays in the current browser tab. The app has no backend, account, analytics, cookies, remote fonts, or runtime API calls. A scenario leaves the tab only when the user explicitly copies a share link or downloads/prints an export.
+
+## Features
+
+- Generic loan EMI with fees, rate changes, and prepayments.
+- Home loan with ownership costs and optional OD modelling. OD is off by default; the OD premium defaults to zero and the opening parked amount supports amount or percentage entry.
+- Optional OD opening balance, fixed monthly contribution, and arbitrary dated deposits or withdrawals.
+- Car loan with on-road costs, financed insurance, balloon payment, resale value, and ownership-cost estimate.
+- Personal loan with reducing/flat quotation modes, deductions, net disbursal, and effective APR.
+- Education loan with dated disbursements, study/moratorium accrual, interest servicing, capitalization, and repayment.
+- Affordability, tenure, interest-rate, and prepayment solvers.
+- Interactive yearly/monthly graph linked to the schedule, with series controls, ranges, OD comparison, keyboard navigation, and touch tooltips.
+- Full-calculator reset with a 10-second undo; explicit remember, restore, and confirmed delete on the current device.
+- Print/PDF, machine-readable CSV, and XLSX with native date, number, percentage, integer, and Boolean cells.
 
 ## Run locally
 
-Use Node 24.18.x and npm 11.16.x. The exact npm version is recorded in `package.json`; `.nvmrc` selects Node 24.18.0.
+Use Node 24.18.x and npm 11.16.x. The versions are pinned in `.nvmrc` and `package.json`.
 
 ```sh
 nvm use
@@ -16,8 +31,6 @@ Open the local URL printed by Vite.
 
 ## Verify
 
-Start from a clean checkout, then run the same install and non-browser verification used by CI:
-
 ```sh
 npm ci --ignore-scripts
 npm run verify
@@ -25,9 +38,9 @@ npx playwright install chromium firefox webkit
 npm run test:e2e
 ```
 
-`npm run verify` runs lint, type-checking, unit tests, and the production build. The Playwright command runs five configured projects: desktop Chromium, Firefox, and WebKit plus Pixel 5 Chrome and iPhone 13 WebKit emulation.
+`npm run verify` runs lint, type-checking, unit tests, and a production build. Playwright covers desktop Chromium, Firefox, and WebKit plus Pixel 5 and iPhone 13 emulation.
 
-To verify the GitHub Pages subpath locally, replace `YOUR_GITHUB_OWNER` and run:
+To test the exact GitHub Pages subpath:
 
 ```sh
 export OWNER=YOUR_GITHUB_OWNER
@@ -35,39 +48,32 @@ VITE_BASE_PATH=/loan_emi_calculator/ VITE_SITE_URL="https://${OWNER}.github.io/l
 VITE_BASE_PATH=/loan_emi_calculator/ npm run test:e2e
 ```
 
-The browser suite checks responsive layouts, keyboard focus, reduced motion, touch-target dimensions, share/error flows, lazy schedules, and exports through automated desktop browsers and mobile emulation. It does not replace testing on physical phones, with a screen reader, or by a person reviewing the financial workflow. Slow-network and thermal/battery behavior also remain manual residual checks.
-
-## Exports
-
-- Print / Save as PDF uses the browser print flow.
-- CSV contains machine-readable monthly amortization.
-- XLSX contains typed Assumptions, Comparison Summary, Monthly Amortization, Yearly Summary, and OD Transactions sheets.
-
 ## Deployment
 
-Pushes to `main` are verified and deployed through GitHub Actions. The build job has read-only repository access; only the separate deploy job receives Pages and OIDC write permissions. The live URL is derived automatically:
+Pushes to `main` are verified and deployed by GitHub Actions. The live endpoint is derived from the repository owner at build time:
 
-`https://<current-repository-owner>.github.io/loan_emi_calculator/`
+`https://<github-username>.github.io/loan_emi_calculator/`
 
-Before the first public release, choose either an MIT license or no license/all rights reserved. Then authenticate GitHub CLI as the intended owner and run:
+The username is not hard-coded. If the repository owner or username changes, rerun the deployment workflow; the new endpoint is generated automatically without a source edit.
+
+GitHub Pages can deploy from a private repository when the account/organization plan supports private-repository Pages. The published Pages site itself should be treated as public unless GitHub Enterprise access controls are explicitly configured.
+
+For a new remote:
 
 ```sh
-gh repo create loan_emi_calculator --public --source=. --remote=origin
+gh repo create loan_emi_calculator --private --source=. --remote=origin
 gh api --method POST repos/{owner}/{repo}/pages -f build_type=workflow
 git push -u origin main
 ```
 
-The second command enables GitHub Actions as the Pages source before the first push. The workflow then verifies and deploys the app over HTTPS.
+Change `--private` to `--public` if desired. The workflow uses read-only repository access for verification; only the separate deployment job receives Pages and OIDC write permissions.
 
-The repository owner comes from the GitHub Actions context; it is not stored in source. After a GitHub username or ownership change, run `gh workflow run deploy.yml`, wait for it to pass, and verify the newly derived URL. No source edit is required.
+## Financial assumptions
 
-To roll back a faulty release, revert the faulty commit on `main`, push the revert, and verify the Pages workflow and live endpoint again.
+- Standard loans use monthly reducing-balance interest unless a calculator explicitly labels another quotation model.
+- Home OD interest uses lender-neutral Actual/365 daily rest on net utilization.
+- Rate changes default to keeping EMI unchanged and adjusting tenure; eligible flows also offer keeping tenure and adjusting EMI.
+- Ownership costs and estimated resale values are displayed separately from loan principal and interest.
+- Results are educational estimates. Confirm lender-specific rules, taxes, fees, day-count conventions, and repayment terms before making a financial decision.
 
-## Important assumptions
-
-- OD interest uses lender-neutral Actual/365 daily rest.
-- Rate changes and prepayments occur on EMI-cycle dates.
-- Ownership costs stay constant and never inflate OD savings.
-- Results are educational estimates; verify them against lender terms.
-
-See [plan.md](./plan.md), the [approved design](./docs/superpowers/specs/2026-07-11-loan-emi-od-calculator-design.md), and [AI_CONTEXT.md](./AI_CONTEXT.md).
+See [plan.md](./plan.md), the [approved suite design](./docs/superpowers/specs/2026-07-12-calculator-suite-redesign-design.md), and [AI_CONTEXT.md](./AI_CONTEXT.md).

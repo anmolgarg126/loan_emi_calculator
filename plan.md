@@ -82,7 +82,7 @@
 - Modify: `src/domain/loan/index.ts`
 - Test: `src/domain/loan/loan.test.ts`
 
-- [ ] **Step 1: Write a failing Home parity test around the extracted contract**
+- [x] **Step 1: Write a failing Home parity test around the extracted contract**
 
 Add to `src/domain/amortization/amortization.test.ts`:
 
@@ -110,13 +110,13 @@ describe('buildAmortizationSchedule', () => {
 })
 ```
 
-- [ ] **Step 2: Run the focused test and verify the missing module failure**
+- [x] **Step 2: Run the focused test and verify the missing module failure**
 
 Run: `npm test -- --run src/domain/amortization/amortization.test.ts`
 
 Expected: FAIL because `src/domain/amortization/index.ts` does not exist.
 
-- [ ] **Step 3: Define the shared contract and move the existing standard schedule logic**
+- [x] **Step 3: Define the shared contract and move the existing standard schedule logic**
 
 Create `src/domain/amortization/index.ts` with these public types:
 
@@ -176,7 +176,7 @@ const payment = monthlyRate === 0
 
 The final schedule row must post the contractual balloon and close the balance to zero.
 
-- [ ] **Step 4: Adapt Home to the shared engine and run parity coverage**
+- [x] **Step 4: Adapt Home to the shared engine and run parity coverage**
 
 In `calculateLoan`, call:
 
@@ -204,7 +204,7 @@ npm run lint
 
 Expected: all existing Home golden, OD, recurrence, and fuzz cases PASS.
 
-- [ ] **Step 5: Commit the extraction**
+- [x] **Step 5: Commit the extraction**
 
 ```sh
 git add src/domain/amortization src/domain/loan/index.ts
@@ -222,7 +222,7 @@ git commit -m "refactor: share amortization engine"
 - Create: `src/domain/calculators/generic.test.ts`
 - Create: `src/domain/calculators/index.ts`
 
-- [ ] **Step 1: Write failing Generic result and dispatch tests**
+- [x] **Step 1: Write failing Generic result and dispatch tests**
 
 ```ts
 import { describe, expect, it } from 'vitest'
@@ -245,7 +245,7 @@ Run: `npm test -- --run src/domain/calculators/generic.test.ts`
 
 Expected: FAIL because the suite modules do not exist.
 
-- [ ] **Step 2: Define discriminated scenario and normalized result types**
+- [x] **Step 2: Define discriminated scenario and normalized result types**
 
 Create `src/domain/calculators/types.ts`:
 
@@ -304,7 +304,7 @@ export type SuiteResult =
 
 Tasks 4, 5, and 6 extend these unions only when the corresponding concrete module exists, so every intermediate commit type-checks.
 
-- [ ] **Step 3: Implement Generic defaults, validation, and normalization**
+- [x] **Step 3: Implement Generic defaults, validation, and normalization**
 
 Create `generic.ts` with:
 
@@ -330,7 +330,7 @@ export const defaultGenericScenario = (): GenericScenario => ({
 
 Validate finite principal `> 0 && <= 1_000_000_000`, annual rate `0..50`, tenure `1..480`, a valid date, non-negative fee, unique event IDs, valid event dates, and 100-entry caps. On errors, return an empty schedule. On success, call `buildAmortizationSchedule` and normalize its rows.
 
-- [ ] **Step 4: Add switch-based dispatch without a plugin framework**
+- [x] **Step 4: Add switch-based dispatch without a plugin framework**
 
 Create `src/domain/calculators/index.ts`:
 
@@ -352,7 +352,7 @@ export function calculateSuite(scenario: SuiteScenario): SuiteResult {
 
 Tasks 4, 5, and 6 add their default and calculation cases after extending `SuiteScenario` and `SuiteResult`; TypeScript must never be committed with missing imports.
 
-- [ ] **Step 5: Verify and commit Generic**
+- [x] **Step 5: Verify and commit Generic**
 
 Run:
 
@@ -378,7 +378,7 @@ git commit -m "feat: add generic loan calculator"
 - Create: `src/domain/calculators/solvers.ts`
 - Create: `src/domain/calculators/solvers.test.ts`
 
-- [ ] **Step 1: Add independent solver fixtures**
+- [x] **Step 1: Add independent solver fixtures**
 
 ```ts
 import { describe, expect, it } from 'vitest'
@@ -399,13 +399,13 @@ describe('loan solvers', () => {
 })
 ```
 
-- [ ] **Step 2: Run the test and confirm missing exports**
+- [x] **Step 2: Run the test and confirm missing exports**
 
 Run: `npm test -- --run src/domain/calculators/solvers.test.ts`
 
 Expected: FAIL because solver functions are undefined.
 
-- [ ] **Step 3: Implement affordability and tenure formulas**
+- [x] **Step 3: Implement affordability and tenure formulas**
 
 Use these exact boundaries:
 
@@ -424,13 +424,13 @@ export const solveTenureMonths = ({ principal, annualRate, emi }: TenureInput) =
 }
 ```
 
-- [ ] **Step 4: Implement bounded implied-rate bisection and prepayment comparison**
+- [x] **Step 4: Implement bounded implied-rate bisection and prepayment comparison**
 
 `solveAnnualRate` must search `0..50` percent for at most 80 iterations and stop when the EMI error is below ₹0.005. Reject non-finite input and a target EMI outside the zero-rate/50%-rate bounds.
 
 `comparePrepayment` must calculate a baseline and modified `AmortizationResult`, then return interest saved, months saved, original payoff, modified payoff, and both schedules. It must accept both keep-EMI and keep-tenure behavior.
 
-- [ ] **Step 5: Verify boundaries and commit**
+- [x] **Step 5: Verify boundaries and commit**
 
 Add cases for zero rate, unaffordable EMI, no implied-rate solution, exact boundary rates, and one-time/recurring prepayments.
 
@@ -454,7 +454,7 @@ git commit -m "feat: add loan solver tools"
 - Modify: `src/domain/calculators/types.ts`
 - Modify: `src/domain/calculators/index.ts`
 
-- [ ] **Step 1: Add balloon and ownership-cost fixtures**
+- [x] **Step 1: Add balloon and ownership-cost fixtures**
 
 ```ts
 it('keeps resale separate from the contractual balloon', () => {
@@ -475,7 +475,7 @@ it('keeps resale separate from the contractual balloon', () => {
 })
 ```
 
-- [ ] **Step 2: Define Car scenario and result types**
+- [x] **Step 2: Define Car scenario and result types**
 
 ```ts
 export interface CarScenario {
@@ -507,7 +507,7 @@ export interface CarResult {
 }
 ```
 
-- [ ] **Step 3: Implement defaults, validation, and calculation**
+- [x] **Step 3: Implement defaults, validation, and calculation**
 
 Defaults: ₹10 lakh vehicle, 20% down payment, 10% rate, 60 months, no balloon, resale horizon equal to tenure. Validate balloon `< financed principal`, ownership horizon `1..tenure`, and all money within the supported cap.
 
@@ -527,11 +527,11 @@ const financedPrincipal = roundMoney(
 
 Call `buildAmortizationSchedule` with `balloonAmount`. Compute horizon outflow from down payment, unfinanced fees, processing fee, schedule payments through ownership horizon, and the contractual balloon if it falls in that horizon. Subtract resale only from ownership cost.
 
-- [ ] **Step 4: Normalize and dispatch Car**
+- [x] **Step 4: Normalize and dispatch Car**
 
 Map principal, interest, prepayment, fees, and balance into `UnifiedScheduleRow`. Add Car to `defaultSuiteScenario` and `calculateSuite` only after all types and tests compile.
 
-- [ ] **Step 5: Verify and commit**
+- [x] **Step 5: Verify and commit**
 
 Run:
 
@@ -559,7 +559,7 @@ git commit -m "feat: add car loan calculator"
 - Modify: `src/domain/calculators/types.ts`
 - Modify: `src/domain/calculators/index.ts`
 
-- [ ] **Step 1: Add net-disbursal, flat-rate, and APR fixtures**
+- [x] **Step 1: Add net-disbursal, flat-rate, and APR fixtures**
 
 ```ts
 it('separates requested principal from net amount received', () => {
@@ -590,7 +590,7 @@ it('calculates a flat-rate quotation on original principal', () => {
 })
 ```
 
-- [ ] **Step 2: Define the Personal scenario/result contract**
+- [x] **Step 2: Define the Personal scenario/result contract**
 
 ```ts
 export interface PersonalScenario {
@@ -610,7 +610,7 @@ export interface PersonalScenario {
 
 The result must expose quoted rate, effective APR, net disbursed, each deduction, EMI, total repayment, interest, and normalized schedule.
 
-- [ ] **Step 3: Implement reducing and flat schedules**
+- [x] **Step 3: Implement reducing and flat schedules**
 
 Reducing mode calls `buildAmortizationSchedule`. Flat mode uses:
 
@@ -622,11 +622,11 @@ const initialEmi = roundMoney((scenario.principal + totalInterest) / scenario.te
 
 Build a monthly flat schedule that posts equal interest except for the final rounding correction, reduces principal evenly, applies allowed prepayments, and ends at zero.
 
-- [ ] **Step 4: Solve effective APR from dated borrower cash flows**
+- [x] **Step 4: Solve effective APR from dated borrower cash flows**
 
 Create cash flow zero as positive `netDisbursed` and monthly payments as negative values. Use bounded bisection on monthly rate `0..50%/12`, stop below ₹0.005 NPV error or after 100 iterations, and return annual nominal APR `monthlyRate * 12 * 100`. Reject a non-positive net disbursal.
 
-- [ ] **Step 5: Verify and commit**
+- [x] **Step 5: Verify and commit**
 
 Add zero-fee equality, amount/percentage fee, GST, flat/reducing, prepayment, and impossible-net-disbursal cases.
 
@@ -650,7 +650,7 @@ git commit -m "feat: add personal loan calculator"
 - Modify: `src/domain/calculators/types.ts`
 - Modify: `src/domain/calculators/index.ts`
 
-- [ ] **Step 1: Add dated disbursement and capitalization fixtures**
+- [x] **Step 1: Add dated disbursement and capitalization fixtures**
 
 ```ts
 it('accrues study interest only after each disbursement', () => {
@@ -678,7 +678,7 @@ it('full interest servicing prevents capitalization', () => {
 })
 ```
 
-- [ ] **Step 2: Define Education phases and list types**
+- [x] **Step 2: Define Education phases and list types**
 
 ```ts
 export interface EducationDisbursement {
@@ -706,7 +706,7 @@ export interface EducationScenario {
 
 Cap disbursements at 100, require unique non-empty IDs, ordered valid dates inside the study/moratorium horizon, total disbursed `<= courseCost - ownContribution`, and supported numeric bounds.
 
-- [ ] **Step 3: Implement the chronological study/moratorium ledger**
+- [x] **Step 3: Implement the chronological study/moratorium ledger**
 
 Loop from the first disbursement epoch day through the repayment-start day. Apply same-day disbursements first, then servicing, then accrue closing-state simple interest:
 
@@ -729,11 +729,11 @@ servicedInterest += service
 
 At repayment start, capitalize `roundMoney(accruedInterest)` exactly once.
 
-- [ ] **Step 4: Build repayment schedule and phase rows**
+- [x] **Step 4: Build repayment schedule and phase rows**
 
 Call `buildAmortizationSchedule` with `totalDisbursed + capitalizedInterest`. Normalize study/moratorium rows with payment, interest serviced, disbursement, accrued interest, and phase label; normalize repayment rows with principal, interest, payment, prepayment, and balance.
 
-- [ ] **Step 5: Verify leap years, boundaries, and commit**
+- [x] **Step 5: Verify leap years, boundaries, and commit**
 
 Add leap-year Actual/365, partial servicing, 100/101 disbursement limits, duplicate IDs, over-disbursement, zero capitalization, repayment prepayment, and final reconciliation tests.
 
@@ -765,7 +765,7 @@ git commit -m "feat: add education loan calculator"
 - Modify: `src/lib/share.ts`
 - Modify: `src/lib/share.test.ts`
 
-- [ ] **Step 1: Add v2 round-trip and malicious-data tests**
+- [x] **Step 1: Add v2 round-trip and malicious-data tests**
 
 ```ts
 it.each(['generic', 'home', 'car', 'personal', 'education'] as const)(
@@ -781,7 +781,7 @@ it('rejects malformed remembered data atomically', () => {
 })
 ```
 
-- [ ] **Step 2: Implement one declared-field parser per scenario**
+- [x] **Step 2: Implement one declared-field parser per scenario**
 
 `suite-codec.ts` must expose:
 
@@ -794,13 +794,13 @@ export function parseSuiteScenarioJson(json: string): SuiteScenario | null
 
 Reuse dependency-free `isRecord`, finite-number, string, Boolean, enum, and capped-list readers. Do not spread untrusted objects. Reject wrong calculator kinds, invalid nested types, non-finite values, duplicate IDs, blank IDs, and lists above 100.
 
-- [ ] **Step 3: Preserve v1 Home links and add v2 fragments**
+- [x] **Step 3: Preserve v1 Home links and add v2 fragments**
 
 `decodeScenario` becomes `decodeSharedScenario` returning `SuiteScenario | null`. If the fragment starts `v1=`, call the existing Home parser and wrap `{ kind: 'home', value }`. New shares always write `v2=` and include calculator kind.
 
 `scenarioUrl` must preserve the Pages base and set `?calculator=<kind>` before adding the fragment.
 
-- [ ] **Step 4: Implement explicit local remember/restore/delete**
+- [x] **Step 4: Implement explicit local remember/restore/delete**
 
 Create `remembered-scenario.ts`:
 
@@ -837,7 +837,7 @@ export const deleteRememberedScenario = (): boolean => {
 
 Do not register a `storage` listener and do not auto-apply `readRememberedScenario()`.
 
-- [ ] **Step 5: Verify boundaries and commit**
+- [x] **Step 5: Verify boundaries and commit**
 
 Test all calculator kinds, v1 compatibility, unknown keys, malformed JSON/base64, 8,000-character fragment limit, localStorage exceptions, explicit delete, and no automatic restore.
 
@@ -860,7 +860,7 @@ git commit -m "feat: share and remember suite scenarios"
 - Create: `src/lib/suite-state.test.ts`
 - Modify: `src/App.tsx`
 
-- [ ] **Step 1: Add pure state-transition tests**
+- [x] **Step 1: Add pure state-transition tests**
 
 ```ts
 it('resets the active calculator without deleting remembered data', () => {
@@ -879,7 +879,7 @@ it('keeps two models independent', () => {
 })
 ```
 
-- [ ] **Step 2: Define the state model and reducer**
+- [x] **Step 2: Define the state model and reducer**
 
 ```ts
 export interface GraphState {
@@ -903,15 +903,15 @@ export interface SuiteModel {
 
 Actions: `set-scenario`, `select-kind`, `restore`, `reset`, `undo-reset`, `expire-undo`, `set-graph`, and `clear-shared`. Every scenario transition calls `calculateSuite` once before constructing the next state.
 
-- [ ] **Step 3: Parse calculator query and shared fragment once at startup**
+- [x] **Step 3: Parse calculator query and shared fragment once at startup**
 
 Use `new URL(window.location.href).searchParams.get('calculator')`. A valid v2/v1 share wins over the query kind. Otherwise select the valid query kind or `generic` as the product default.
 
-- [ ] **Step 4: Add reset undo expiration and query updates**
+- [x] **Step 4: Add reset undo expiration and query updates**
 
 Reset stores the previous scenario/graph for 10 seconds. An effect schedules `expire-undo`; cleanup cancels the timer. Calculator selection uses `history.replaceState` to update only `?calculator=` and clears a stale share fragment. No route library is added.
 
-- [ ] **Step 5: Verify and commit state refactor**
+- [x] **Step 5: Verify and commit state refactor**
 
 Run:
 
@@ -941,7 +941,7 @@ git commit -m "refactor: manage calculator suite state"
 - Modify: `src/styles.css`
 - Modify: `e2e/accessibility.spec.ts`
 
-- [ ] **Step 1: Add failing shell accessibility and responsive tests**
+- [x] **Step 1: Add failing shell accessibility and responsive tests**
 
 ```ts
 test('shows calculator tabs, solver tools, and private-device status', async ({ page }) => {
@@ -954,17 +954,17 @@ test('shows calculator tabs, solver tools, and private-device status', async ({ 
 
 Extend the 320, 375, 430, and landscape checks to assert no document overflow and 44 px targets after the new shell renders.
 
-- [ ] **Step 2: Create shared accessible field and disclosure components**
+- [x] **Step 2: Create shared accessible field and disclosure components**
 
 Move `NumberField`, `DateField`, `SelectField`, `ModeToggle`, and `Switch` from `App.tsx` into `CalculatorFields.tsx` without changing IDs, labels, errors, `aria-describedby`, or `aria-invalid` behavior.
 
 `GuidedSection` accepts `step`, `title`, `description`, `optional`, `configured`, `open`, and `onToggle`. Its summary must announce expanded state through native `<details>` semantics and display “Optional” or “Configured” text, not color alone.
 
-- [ ] **Step 3: Build the suite shell**
+- [x] **Step 3: Build the suite shell**
 
 `CalculatorShell` renders one `h1`, an accessible `role="tablist"`, five tab buttons, four solver buttons, the privacy status, guided-form slot, result slot, graph slot, and schedule slot. Arrow keys move between calculator tabs; Enter/Space selects.
 
-- [ ] **Step 4: Replace the editorial CSS with approved tokens**
+- [x] **Step 4: Replace the editorial CSS with approved tokens**
 
 Start `src/styles.css` with:
 
@@ -994,7 +994,7 @@ Start `src/styles.css` with:
 
 Remove `.paper-grid`, oversized serif hero rules, repeated eyebrow styling, decorative side stripes, and remote-font assumptions. Use fixed product typography, tabular numeric figures, 4/8 px spacing, bounded shadows, and `prefers-reduced-motion` overrides.
 
-- [ ] **Step 5: Run visual shell checks and commit**
+- [x] **Step 5: Run visual shell checks and commit**
 
 Run:
 
@@ -1025,7 +1025,7 @@ git commit -m "feat: add guided calculator shell"
 - Modify: `src/App.tsx`
 - Create: `e2e/calculator-suite.spec.ts`
 
-- [ ] **Step 1: Add browser tests for all calculator forms**
+- [x] **Step 1: Add browser tests for all calculator forms**
 
 Create table-driven tests that select each preset and assert its unique fields:
 
@@ -1045,19 +1045,19 @@ for (const [tab, field] of [
 }
 ```
 
-- [ ] **Step 2: Move Home fields without changing IDs or calculations**
+- [x] **Step 2: Move Home fields without changing IDs or calculations**
 
 `HomeForm` receives `scenario`, `result`, `issueFor`, and `onChange`. Move all existing essential, ownership, prepayment, rate-change, OD, and transaction controls from `App.tsx`. Keep dynamic IDs and exact 100-entry caps.
 
-- [ ] **Step 3: Implement Generic, Car, and Personal guided forms**
+- [x] **Step 3: Implement Generic, Car, and Personal guided forms**
 
 Use shared fields and `GuidedSection`. Essential fields open by default; fees, prepayments, rate changes, balloon/resale, and deductions are optional sections. Every mode selector has `aria-pressed`, labelled bases, and field-keyed errors.
 
-- [ ] **Step 4: Implement Education and solver forms**
+- [x] **Step 4: Implement Education and solver forms**
 
 Education has separate Study funding, Moratorium servicing, and Repayment sections. Dated disbursement rows use stable IDs and a 100-row cap. `SolverForm` switches among four solver-specific inputs and presents impossible-scenario errors inline.
 
-- [ ] **Step 5: Verify and commit forms**
+- [x] **Step 5: Verify and commit forms**
 
 Run:
 
@@ -1086,7 +1086,7 @@ git commit -m "feat: add specialized calculator forms"
 - Modify: `src/App.tsx`
 - Modify: `e2e/exports.spec.ts`
 
-- [ ] **Step 1: Add typed export contracts for each calculator**
+- [x] **Step 1: Add typed export contracts for each calculator**
 
 For every kind, build and reopen a workbook. Assert native Date, number, percentage, integer, Boolean, formula, and text cells plus calculator-specific assumptions. Assert filenames contain the calculator kind.
 
@@ -1105,11 +1105,11 @@ it.each(['generic', 'home', 'car', 'personal', 'education'] as const)(
 )
 ```
 
-- [ ] **Step 2: Build `ResultSummary` from normalized metrics**
+- [x] **Step 2: Build `ResultSummary` from normalized metrics**
 
 Render `view.primary`, `view.metrics`, calculator-specific comparison blocks, validity status, Undo reset, Remember, Restore, Delete saved scenario, Share, Print, CSV, and XLSX. Use the current result for validity and last valid result only for visibly labelled estimates.
 
-- [ ] **Step 3: Generalize CSV and XLSX exports**
+- [x] **Step 3: Generalize CSV and XLSX exports**
 
 Rename APIs to `createSuiteCsv`, `buildSuiteWorkbook`, `downloadSuiteCsv`, and `downloadSuiteXlsx`. Use normalized schedule columns for every calculator, then add kind-specific sheets:
 
@@ -1120,11 +1120,11 @@ Rename APIs to `createSuiteCsv`, `buildSuiteWorkbook`, `downloadSuiteCsv`, and `
 
 Keep ExcelJS lazy-loaded and preserve delayed object-URL revocation.
 
-- [ ] **Step 4: Update browser downloads and print**
+- [x] **Step 4: Update browser downloads and print**
 
 Test non-empty calculator-specific CSV/XLSX downloads and print preparation for Home and one non-Home preset. Ensure invalid current input disables all actions.
 
-- [ ] **Step 5: Verify and commit**
+- [x] **Step 5: Verify and commit**
 
 Run:
 
@@ -1153,7 +1153,7 @@ git commit -m "feat: export calculator suite results"
 - Modify: `src/components/Charts.tsx`
 - Create: `e2e/graph.spec.ts`
 
-- [ ] **Step 1: Add graph aggregation reconciliation tests**
+- [x] **Step 1: Add graph aggregation reconciliation tests**
 
 ```ts
 it('aggregates yearly bars without changing totals', () => {
@@ -1168,19 +1168,19 @@ it('aggregates yearly bars without changing totals', () => {
 })
 ```
 
-- [ ] **Step 2: Implement pure monthly/yearly aggregation**
+- [x] **Step 2: Implement pure monthly/yearly aggregation**
 
 `aggregateGraphPeriods(schedule, granularity)` returns period key/label, principal, prepayment, interest, costs, payment, closing balance, and optional closing OD net utilization. Yearly rows sum flow values and take the final closing balances.
 
-- [ ] **Step 3: Render dependency-free accessible SVG**
+- [x] **Step 3: Render dependency-free accessible SVG**
 
 `PaymentGraph` accepts `result`, `graphState`, `onGraphStateChange`, and `onSelectPeriod`. Use a fixed viewBox and responsive container. Render stacked `<rect>` bars, standard balance `<path>`, optional OD path, axes, and direct series markers. The schedule table remains the equivalent data view.
 
-- [ ] **Step 4: Add yearly/monthly and legend controls**
+- [x] **Step 4: Add yearly/monthly and legend controls**
 
 Use labelled buttons with `aria-pressed`. Hidden series are removed from stack math and legend text says “Show” or “Hide.” Do not rely on opacity alone. Add a concise `aria-describedby` summary containing starting balance, final balance, total principal, and total interest.
 
-- [ ] **Step 5: Verify and commit graph foundation**
+- [x] **Step 5: Verify and commit graph foundation**
 
 Run:
 
@@ -1207,7 +1207,7 @@ git commit -m "feat: add interactive payment graph"
 - Modify: `e2e/graph.spec.ts`
 - Modify: `e2e/accessibility.spec.ts`
 
-- [ ] **Step 1: Add failing tooltip, range, OD, and schedule-link tests**
+- [x] **Step 1: Add failing tooltip, range, OD, and schedule-link tests**
 
 ```ts
 test('links graph periods and schedule years', async ({ page }) => {
@@ -1221,19 +1221,19 @@ test('links graph periods and schedule years', async ({ page }) => {
 
 Add legend keyboard toggling, touch tooltip, range start/end, Escape clear, OD compare, and schedule-to-graph selection cases.
 
-- [ ] **Step 2: Implement keyboard, pointer, and tap tooltips**
+- [x] **Step 2: Implement keyboard, pointer, and tap tooltips**
 
 Each period group receives `tabIndex={0}`, `role="button"`, and a localized `aria-label`. Focus/pointer/tap set one selected period. Escape clears it. Render a single `role="tooltip"` outside the SVG and connect with `aria-describedby`.
 
-- [ ] **Step 3: Implement accessible date-range controls**
+- [x] **Step 3: Implement accessible date-range controls**
 
 Use two labelled `input type="range"` controls for first and last visible period. Clamp start `< end`, preserve at least two periods, and update only graph presentation state. Avoid a pointer-only custom brush.
 
-- [ ] **Step 4: Link graph and schedule selections**
+- [x] **Step 4: Link graph and schedule selections**
 
 `Schedule` accepts `selectedPeriod` and `onSelectPeriod`. Store year `<details>` refs by key. When selection changes, open the matching year and call `scrollIntoView({ block: 'nearest', behavior: reducedMotion ? 'auto' : 'smooth' })`. Clicking/focusing a schedule row selects its graph period.
 
-- [ ] **Step 5: Verify five interaction paths and commit**
+- [x] **Step 5: Verify five interaction paths and commit**
 
 Run:
 
@@ -1260,7 +1260,7 @@ git commit -m "feat: link graph and schedule"
 - Create: `e2e/privacy-state.spec.ts`
 - Modify: `e2e/sharing-errors.spec.ts`
 
-- [ ] **Step 1: Add two-context privacy tests**
+- [x] **Step 1: Add two-context privacy tests**
 
 ```ts
 test('keeps open tabs independent and restores only on request', async ({ browser }) => {
@@ -1278,19 +1278,19 @@ test('keeps open tabs independent and restores only on request', async ({ browse
 })
 ```
 
-- [ ] **Step 2: Wire explicit remember and restore UI**
+- [x] **Step 2: Wire explicit remember and restore UI**
 
 Remember writes only on button/toggle confirmation. Startup reads only whether a valid snapshot is available. Restore dispatches `restore` after user activation. No effect watches localStorage and no open tab receives another tab’s changes.
 
-- [ ] **Step 3: Wire reset, undo, and delete**
+- [x] **Step 3: Wire reset, undo, and delete**
 
 Reset dispatches the pure reset action and announces “Calculator reset. Undo available for 10 seconds.” Undo restores scenario and graph. Delete saved scenario uses `window.confirm('Delete the saved scenario from this device?')`, deletes the snapshot only after confirmation, and leaves current in-memory state unchanged.
 
-- [ ] **Step 4: Assert no unexpected network or storage side effects**
+- [x] **Step 4: Assert no unexpected network or storage side effects**
 
 In each privacy test, collect requests after initial same-origin JS/CSS load. Calculation, tab changes, graph interactions, remember, restore, reset, sharing, and exports must create no HTTP request. Assert there is no cookie and no `storage` event changes another page.
 
-- [ ] **Step 5: Verify and commit privacy behavior**
+- [x] **Step 5: Verify and commit privacy behavior**
 
 Run:
 
@@ -1319,15 +1319,15 @@ git commit -m "feat: add explicit local scenario restore"
 - Modify: `e2e/accessibility.spec.ts`
 - Modify: `e2e/exports.spec.ts`
 
-- [ ] **Step 1: Add deterministic calculator invariants**
+- [x] **Step 1: Add deterministic calculator invariants**
 
 Run 1,000 fixed-seed valid scenarios per calculator where practical. For every error-free amortizing result assert non-negative balances, final zero balance, principal reconciliation, interest reconciliation, finite totals, monotonic contractual balance absent new disbursement, and schedule length guards. Education additionally reconciles disbursements, serviced interest, capitalization, and repayment principal.
 
-- [ ] **Step 2: Add a full browser journey per calculator**
+- [x] **Step 2: Add a full browser journey per calculator**
 
 Each journey changes specialized inputs, verifies headline and graph changes, expands a schedule year, shares into a new context, downloads CSV/XLSX, prepares print, resets, and confirms defaults. Use stable labels and values, not screenshots as assertions.
 
-- [ ] **Step 3: Run unit tests twice**
+- [x] **Step 3: Run unit tests twice**
 
 Run:
 
@@ -1338,7 +1338,7 @@ npm test
 
 Expected: both runs PASS with identical test counts and no timing flake.
 
-- [ ] **Step 4: Run the five-project browser matrix at root and Pages subpath**
+- [x] **Step 4: Run the five-project browser matrix at root and Pages subpath**
 
 ```sh
 npm run build
@@ -1349,7 +1349,7 @@ env VITE_BASE_PATH=/loan_emi_calculator/ VITE_SITE_URL=https://owner.github.io/l
 
 Expected: Chromium, Firefox, WebKit, Pixel 5, and iPhone 13 projects PASS in both deployments with no console/page errors or cross-origin runtime resources.
 
-- [ ] **Step 5: Commit final regression coverage**
+- [x] **Step 5: Commit final regression coverage**
 
 ```sh
 git add src/domain/calculators e2e
@@ -1368,7 +1368,7 @@ git commit -m "test: cover calculator suite journeys"
 - Modify: `loan_emi_calculator-threat-model.md`
 - Review: all files changed by Tasks 1–15
 
-- [ ] **Step 1: Run the clean pinned-toolchain gate**
+- [x] **Step 1: Run the clean pinned-toolchain gate**
 
 From an exact `git archive` under Node 24.18.0/npm 11.16.0:
 
@@ -1382,19 +1382,19 @@ git diff --check
 
 Expected: all commands exit 0 and production audit reports 0 vulnerabilities.
 
-- [ ] **Step 2: Measure bundle, DOM, and calculations**
+- [x] **Step 2: Measure bundle, DOM, and calculations**
 
 Record initial JS/CSS gzip, lazy ExcelJS gzip, initial DOM nodes, default calculation median, supported-maximum Home/OD median, and representative Car/Personal/Education medians. Initial JS+CSS must remain below 85 kB, initial DOM below 1,000 nodes, every calculation below the existing 100 ms guard, and no calculator edit may calculate twice.
 
-- [ ] **Step 3: Perform visual inspection at approved viewports**
+- [x] **Step 3: Perform visual inspection at approved viewports**
 
 Capture and inspect 1440×900, 1024×768, 430×932, 375×812, 320×568, and 812×375 for every calculator shell plus Home OD, invalid input, remembered snapshot prompt, graph tooltip/range/OD comparison, schedule selection, focus, reduced motion, and print media. Record physical-device, real screen-reader, and OS print-dialog limitations explicitly.
 
-- [ ] **Step 4: Re-run security and privacy review**
+- [x] **Step 4: Re-run security and privacy review**
 
 Scan source/workflows for raw HTML, `eval`, remote scripts/fonts, credentials, runtime network APIs, cookies, service workers, broad permissions, storage listeners, and unsafe parsing. Confirm all external snapshots use declared-field parsing, all actions remain immutable in CI, and runtime calculation/share/export/remember flows make no network request.
 
-- [ ] **Step 5: Update durable documentation and commit evidence**
+- [x] **Step 5: Update durable documentation and commit evidence**
 
 Document calculator formulas, solver boundaries, graph interactions, reset/undo, remember/restore/delete semantics, independent tabs, exports, commands, deployment, and residual limitations.
 
@@ -1407,15 +1407,15 @@ git commit -m "docs: record calculator suite guarantees"
 
 ## Completion checklist
 
-- [ ] Generic, Home, Car, Personal, and Education calculators are available from accessible preset tabs.
-- [ ] Affordability, Prepayment, Tenure, and Interest Rate solvers are available without a router dependency.
-- [ ] Home/OD golden outputs remain unchanged for equivalent inputs.
-- [ ] Specialized Car, Personal, and Education formulas have independent golden fixtures and reconciliation tests.
-- [ ] Every tab owns independent in-memory state; remembered data is off by default and restored only by explicit action.
-- [ ] Reset supports undo and does not delete remembered data; deletion is a separate confirmed action.
-- [ ] Share links are calculator-aware, v1 Home links remain readable, and malformed data is rejected atomically.
-- [ ] The interactive graph supports tooltips, series toggles, range focus, yearly/monthly views, OD comparison, and two-way schedule linkage.
-- [ ] Graph values, schedules, CSV, typed XLSX, and print outputs reconcile.
-- [ ] Calm teal product styling replaces the oversized editorial hero and decorative grid while preserving accessibility.
-- [ ] Root and GitHub Pages subpath matrices pass in five browser projects.
-- [ ] Bundle, DOM, calculation, dependency-audit, and security budgets pass.
+- [x] Generic, Home, Car, Personal, and Education calculators are available from accessible preset tabs.
+- [x] Affordability, Prepayment, Tenure, and Interest Rate solvers are available without a router dependency.
+- [x] Home/OD golden outputs remain unchanged for equivalent inputs.
+- [x] Specialized Car, Personal, and Education formulas have independent golden fixtures and reconciliation tests.
+- [x] Every tab owns independent in-memory state; remembered data is off by default and restored only by explicit action.
+- [x] Reset supports undo and does not delete remembered data; deletion is a separate confirmed action.
+- [x] Share links are calculator-aware, v1 Home links remain readable, and malformed data is rejected atomically.
+- [x] The interactive graph supports tooltips, series toggles, range focus, yearly/monthly views, OD comparison, and two-way schedule linkage.
+- [x] Graph values, schedules, CSV, typed XLSX, and print outputs reconcile.
+- [x] Calm teal product styling replaces the oversized editorial hero and decorative grid while preserving accessibility.
+- [x] Root and GitHub Pages subpath matrices pass in five browser projects.
+- [x] Bundle, DOM, calculation, dependency-audit, and security budgets pass.

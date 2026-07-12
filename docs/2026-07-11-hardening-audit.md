@@ -2,6 +2,32 @@
 
 Date: 2026-07-11
 
+## Calculator suite release update — 2026-07-12
+
+The approved redesign expands the original Home/OD calculator into Generic, Home, Car, Personal, and Education calculators plus Affordability, Prepayment, Tenure, and Interest Rate solvers. The audited Home/OD engine and its lender-neutral semantics remain intact. New shared amortization, specialist-calculator, strict V2 state, explicit local restore, graph, schedule, and typed-export boundaries have focused regression coverage.
+
+| Release gate | Result |
+|---|---:|
+| TypeScript + ESLint | Pass |
+| Unit and deterministic performance tests | 282/282 pass across 15 files |
+| Root production browser matrix | 175/175 pass |
+| GitHub Pages `/loan_emi_calculator/` matrix | 175/175 pass |
+| Browsers | Chromium, Firefox, WebKit, Pixel 5 emulation, iPhone 13 emulation |
+| Initial JS + CSS transfer | 77,196 bytes, below the 85,000-byte budget |
+| Initial DOM | 151 elements for the default view |
+| Desktop/mobile overflow audit | None at 1440×900 or 375×812 |
+| Production dependency audit | 0 known vulnerabilities |
+
+The graph and schedule load when the user reaches the analysis section. Solvers, exports, and ExcelJS remain action-triggered lazy chunks. Share and explicit remember/restore parsing stay synchronous because correctness and deterministic user actions are worth the measured 1,985-byte startup difference. ExcelJS is still isolated from startup and downloaded only for XLSX export.
+
+### Calculator performance fixtures
+
+Each supported-maximum fixture runs in the committed deterministic performance test. The recorded local Node 24.18.0 medians/maxima were: Generic 0.169/0.251 ms, Home maximum 1.992/4.450 ms, Car 0.309/0.452 ms, Personal 0.259/0.429 ms, and Education 1.336/1.612 ms. These are local regression measurements, not end-user latency guarantees.
+
+### Privacy and isolation result
+
+The runtime has no backend, account, cookie, analytics, remote asset, service worker, fetch/WebSocket, or storage-event synchronization. Active scenarios and calculations are isolated per tab and per machine. A versioned `localStorage` snapshot is created only by **Remember**, is never automatically applied, and enters another tab only after **Restore saved**. Share fragments and local downloads leave the active tab only after explicit user actions.
+
 Baseline scope: committed application at `5df8c28` plus read-only audit scripts outside the repository. Resolution evidence below covers hardening commits through `ed64e45`; final completion evidence was measured from the exact tree `ed64e4588448e51a2dd23f88a7404a373505beb3` on 2026-07-12.
 
 ## Executive result

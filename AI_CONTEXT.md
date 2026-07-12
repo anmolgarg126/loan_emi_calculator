@@ -1,85 +1,63 @@
 # AI Context
 
-Loan Ledger is a static, lender-neutral Indian home-loan EMI and overdraft calculator built with Vite, React, TypeScript, native SVG charts, and lazy-loaded ExcelJS. It runs entirely in the browser and deploys to GitHub Pages.
+Loan EMI Calculator is a static, lender-neutral loan planning suite built with React, TypeScript, Vite, plain CSS, native SVG, and lazy-loaded ExcelJS. It runs entirely in the browser and deploys to GitHub Pages.
 
-## Sources Of Truth
+## Sources of truth
 
-Read these before changing behavior:
+1. `docs/superpowers/specs/2026-07-12-calculator-suite-redesign-design.md` defines the approved suite semantics and UX.
+2. `plan.md` contains the implementation tasks and acceptance gates.
+3. `src/domain/calculators/` owns calculator-specific validation and results.
+4. `src/domain/amortization/` owns reusable reducing-balance schedules.
+5. `src/domain/loan/` remains authoritative for the audited Home/OD model.
+6. `README.md` contains setup, verification, privacy, and deployment guidance.
 
-1. `docs/superpowers/specs/2026-07-11-loan-emi-od-calculator-design.md` defines approved product semantics and acceptance criteria.
-2. `plan.md` defines implementation scope and deferred features.
-3. `src/domain/loan/index.ts` is the executable financial model.
-4. `README.md` contains setup, verification, and deployment commands.
+## Product invariants
 
-Keep this file concise. Update the design first when financial behavior changes, then update tests and implementation together.
+- Calculators: Generic, Home, Car, Personal, and Education. Solvers: Affordability, Tenure, Interest Rate, and Prepayment.
+- Financial formulas stay outside React. Shared consumers use the discriminated suite scenario/result contract.
+- Home OD is optional and off by default. The extra OD rate defaults to zero. Opening parked funds support amount or percentage; dated deposits/withdrawals and monthly contributions are separately optional.
+- Rate changes default to keeping EMI and adjusting tenure. Where valid, both keep-EMI and keep-tenure modes remain available.
+- Standard loans are monthly reducing balance. Home OD is Actual/365 daily rest. Education study/moratorium accrual is Actual/365 simple interest on disbursed outstanding. Personal flat-rate mode must remain visibly distinct from effective APR.
+- Car resale value never silently reduces principal. A balloon is a visible contractual final payment.
+- Every user-created list is capped at 100 entries. External shared or stored state is parsed strictly and rejected atomically when invalid.
+- Share state uses a versioned URL fragment capped at 8,000 characters. V1 Home fragments remain readable; new suite fragments use V2.
+- Tabs do not synchronize. Calculations and transient state are memory-local to the tab. A saved snapshot uses `localStorage` only after explicit Remember, and another tab restores it only after explicit Restore.
+- No backend, authentication, analytics, telemetry, cookie, remote script/font, service worker, runtime fetch, or automatic transmission of financial inputs.
+- CSV is machine-readable. XLSX uses native typed date, number, percentage, integer, and Boolean cells.
+- Reset affects the entire active calculator and offers a 10-second in-memory undo. Deleting a remembered snapshot requires confirmation and does not reset the active calculation.
 
-## Product Invariants
-
-- V1 is lender-neutral and educational, not a reproduction of a bank product or financial advice.
-- Standard loans use monthly-reducing interest. Rate changes and permanent prepayments occur only on EMI-cycle dates.
-- OD interest uses Actual/365 daily rest on `max(drawingPower - parkedSurplus, 0)`.
-- OD is off by default. Arbitrary OD transactions are separately toggled off by default and capped at 100.
-- Parked surplus is withdrawable liquidity, never a prepayment or an upfront cost.
-- Prepayments permanently reduce drawing power and cannot be withdrawn.
-- OD savings include lender-interest difference minus one-time and annual OD fees. Ownership costs and parked liquidity are excluded.
-- Ownership costs remain constant over the original contracted tenure, even when the loan pays off early.
-- Dates are ISO `YYYY-MM-DD` converted through UTC calendar-day arithmetic. Do not use local-time date math in the financial engine.
-- EMI-cycle dates are converted once to direct cycle indexes. Recurrence checks use integer interval arithmetic rather than scanning candidate dates.
-- Rate changes, prepayments, and arbitrary OD transactions are each capped at 100 entries.
-- Daily interest may retain fractional paise. Posted money uses symmetric round-half-away-from-zero to paise, which is half-up for non-negative amounts; `10.075` becomes `10.08` and `-10.075` becomes `-10.08`.
-- Same-day OD processing posts prior-day interest, applies the scheduled transfer and permanent prepayment, credits recurring surplus, then nets arbitrary deposits before withdrawals. An EMI-date row includes every flow from that date.
-- Net debt-free means the first calendar day after the final day with positive net utilization, and is reported only when the simulated horizon ends debt-free. A temporary full offset before a later withdrawal does not qualify.
-- Share state belongs in a versioned URL fragment and must never exceed 8,000 characters. The decoder reads declared fields only and rejects the whole fragment if any supplied declared field, nested object, list member, or list ID has an invalid type or shape; unknown fields are discarded.
-- No backend, accounts, analytics, telemetry, remote scripts, or automatic transmission of financial inputs.
-- CSV values remain machine-readable. XLSX dates, numbers, percentages, integers, and Booleans must remain native typed cells.
-
-## Repository Map
+## Repository map
 
 ```text
-src/domain/loan/    Financial types, validation, standard engine, daily OD engine
-src/components/     Charts and amortization schedule
-src/lib/            URL-fragment sharing and CSV/XLSX exports
-src/App.tsx         Form state, progressive disclosure, results, and actions
-src/styles.css      Precision-ledger visual system, responsive and print CSS
-e2e/                Playwright production-build smoke test
-.github/workflows/  GitHub Pages verification and deployment
-docs/superpowers/   Approved design specification
-plan.md             Implementation scope
+src/domain/amortization/  Shared schedule engine
+src/domain/calculators/   Suite types, calculators, solvers, performance tests
+src/domain/loan/          Audited Home/OD financial engine
+src/components/           Guided forms, summary, graph, schedule, shell
+src/lib/                  Strict codecs, explicit persistence, sharing, exports
+src/App.tsx               Per-tab orchestration and lazy boundaries
+src/styles.css            Calm teal responsive and print design system
+e2e/                      Cross-browser journeys, privacy, graph, export, a11y
+.github/workflows/        Verified GitHub Pages deployment
 ```
 
-## Change Discipline
+## Change discipline
 
-- Financial formulas stay outside React.
-- Prefer focused typed functions over new abstractions or dependencies.
-- Validate the complete scenario before building schedules. Blocking issues return field-keyed errors and empty schedules; the UI keeps the last valid result and disables print, sharing, and downloads. A same-day OD withdrawal failure does not commit that date's schedule row or fee.
-- Keep input labels and result terminology aligned with the design: drawing power, parked surplus, available withdrawal, and net utilized balance.
-- Do not reintroduce break-even estimates, named local scenarios, pre-EMI, tax advice, custom lender presets, or cloud storage without a new approved design.
-- Update golden tests whenever rounding, event order, payment allocation, fees, or date rules change.
-- Preserve chart table/text alternatives, keyboard access, visible focus, reduced-motion behavior, and 375 px mobile usability.
-- Keep charts native SVG and ExcelJS lazy-loaded so neither requires a heavy initial chart/export bundle.
+- Prefer a direct typed function or native browser feature over a dependency or speculative abstraction.
+- Blocking validation returns field-keyed issues and empty invalid schedules. The UI may display the last valid result but must disable share, print, and downloads until current inputs are valid.
+- Preserve UTC calendar-day date arithmetic, paise rounding rules, same-day event ordering, list caps, schedule reconciliation, and Home parity tests.
+- Preserve visible focus, labels/descriptions, chart text/table alternatives, keyboard/touch graph access, reduced motion, print output, and 320–375 px usability.
+- Keep graph/schedule, solvers, share/storage parsers, and ExcelJS lazy. The default production view must stay within the 85 kB gzip JS+CSS budget.
+- A backend, accounts, telemetry, remote runtime content, lender-specific guarantee, or regulated use requires a new approved design and threat-model update.
 
 ## Commands
 
 ```sh
 nvm use
-npm ci
+npm ci --ignore-scripts
 npm run dev
 npm run verify
 npx playwright install chromium firefox webkit
 npm run test:e2e
 ```
 
-Use `npm ci --ignore-scripts` when reproducing CI exactly. The Playwright suite expects a completed `dist` build, starts `vite preview` automatically, and runs desktop Chromium, Firefox, WebKit, Pixel 5 Chrome emulation, and iPhone 13 WebKit emulation. Physical-device, screen-reader, slow-network, and thermal/battery checks remain manual.
-
-## Deployment
-
-The repository name is fixed as `loan_emi_calculator`; the owner is dynamic. GitHub Actions derives:
-
-- `VITE_BASE_PATH` from `/${{ github.event.repository.name }}/`
-- `VITE_SITE_URL` from `https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/`
-
-Runtime share URLs use `window.location.origin` plus `import.meta.env.BASE_URL`. After an owner/username change, manually rerun the deployment workflow; no source edit is required.
-
-For a new repository, create the remote without pushing, enable Pages with `gh api --method POST repos/{owner}/{repo}/pages -f build_type=workflow`, and then push `main`. This avoids the first workflow run failing because Pages has not been enabled yet.
-
-Do not create or push the public repository until the user has confirmed the licensing choice in `plan.md`.
+GitHub Actions derives the Pages base path from the repository name and the site URL from `github.repository_owner`. After an owner/username change, rerun the workflow; do not hard-code an owner.

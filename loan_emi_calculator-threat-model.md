@@ -1,135 +1,79 @@
 # Loan EMI Calculator Threat Model
 
+**Reviewed:** 2026-07-12
+**Scope:** Browser application, build dependencies, and GitHub Pages workflow
+
 ## Executive summary
 
-Loan Ledger is a low-complexity static calculator with no backend, authentication, storage, or runtime third-party network calls. Its main risks are disclosure when users deliberately copy financial inputs into URLs and build-chain compromise through npm or GitHub Actions. Strict fragment parsing, list caps, constant-time recurrence checks, provenance messaging, and CI privilege separation resolved TM-001 through TM-005. TM-006 remains an accepted low residual risk because the browser runtime has no privileged action. No critical or high runtime vulnerability was found.
+The calculator suite is a static, client-only application. It has no backend, account, authentication, database, analytics, cookie, runtime API request, or remote script. Each tab calculates independently in memory. The only persistence is a single versioned `localStorage` snapshot created by an explicit **Remember** action and loaded only by an explicit **Restore saved** action.
 
-## Scope and assumptions
+The main risks are deliberate disclosure through copied share URLs or downloaded files, malicious/malformed external state, misleading financial results, local-device access to a remembered snapshot, and npm/GitHub Actions supply-chain compromise. Strict parsing, bounded inputs, React escaping, explicit user actions, calculation invariants, lazy exports, immutable workflow actions, and CI privilege separation reduce these risks. No critical or high runtime vulnerability was found.
 
-- In scope: `src/`, `index.html`, `package.json`, `package-lock.json`, `vite.config.ts`, and `.github/workflows/deploy.yml`.
-- Tests and documentation are reviewed as supporting controls, not production entry points.
-- Assumed deployment: public GitHub Pages over HTTPS, public internet exposure, individual users, no backend/auth/database/analytics, and only npm/GitHub Actions as privileged external systems.
-- Financial inputs are moderately sensitive. They stay local unless a user explicitly generates and shares a fragment URL (`src/lib/share.ts:encodeScenario`, `scenarioUrl`).
-- These assumptions were presented for validation but were not confirmed. Adding telemetry, remote scripts, authentication, a backend, or multi-tenancy would materially increase risk and require a new model.
-
-Open questions that would change ranking:
-
-- Will any analytics, advertising, tag manager, or remote script be added?
-- Will the repository accept untrusted pull requests that execute CI?
-- Will the calculator be promoted for regulated or lender-approved decisions rather than educational estimates?
-
-## System model
-
-### Primary components
-
-- React browser UI accepts financial inputs and renders results (`src/App.tsx:App`).
-- The pure TypeScript engine validates and calculates standard and OD schedules (`src/domain/loan/index.ts:calculateLoan`).
-- Share parsing serializes scenarios into URL fragments (`src/lib/share.ts`).
-- Export code creates local CSV/XLSX downloads; ExcelJS is lazy-loaded (`src/lib/exports.ts`).
-- GitHub Actions installs dependencies, tests, builds, and deploys static `dist` files (`.github/workflows/deploy.yml`).
-
-### Data flows and trust boundaries
-
-- User → browser UI: financial numbers and dates cross through native form controls; domain validation applies ranges and date rules, with no authentication or rate limiting.
-- Shared URL → fragment decoder → calculation engine: base64url JSON crosses an untrusted-input boundary; version, length, declared-field types, nested members, IDs, and 100-entry list caps are checked before calculation.
-- Calculation engine → DOM: React text rendering escapes values; the repository contains no `innerHTML`, `dangerouslySetInnerHTML`, `eval`, or remote runtime fetch.
-- Calculation result → local download/clipboard: CSV/XLSX/blob and fragment URLs leave the page only after an explicit user action.
-- GitHub/npm → CI runner → Pages: third-party packages execute in a read-only build job; a separate Pages/OIDC-enabled deploy job consumes the verified artifact. The lockfile pins npm artifacts and workflow actions use immutable commit references.
-
-#### Diagram
+## Architecture and trust boundaries
 
 ```mermaid
 flowchart LR
-  U["User or shared link"] --> B["Browser UI"]
-  B --> E["Loan engine"]
-  E --> R["Rendered results"]
-  E --> X["Local exports"]
-  G["GitHub and npm"] --> C["CI build"]
-  C --> P["GitHub Pages"]
-  P --> B
+  U["User inputs"] --> UI["React browser UI"]
+  L["Shared URL fragment"] --> P["Strict versioned parser"]
+  S["Explicit local snapshot"] --> P
+  P --> E["Pure calculation engines"]
+  UI --> E
+  E --> R["Rendered results and graph"]
+  E --> X["Explicit local print / CSV / XLSX"]
+  G["npm and GitHub"] --> C["Read-only verification build"]
+  C --> D["Separate Pages deploy job"]
+  D --> UI
 ```
+
+- **User → UI/engine:** numbers, dates, selections, and bounded lists cross into field and domain validation.
+- **URL/storage → parser:** attacker-controlled or stale JSON crosses an untrusted boundary. The V2 suite codec declares fields, types, shapes, versions, and list limits; invalid state is rejected atomically. V1 compatibility accepts only the legacy Home schema.
+- **Engine → DOM:** React renders text and attributes. Production source has no raw HTML insertion, `eval`, dynamic code execution, runtime fetch/WebSocket, or remote resources.
+- **Engine → clipboard/files:** financial data leaves the page only after an explicit Share, Print, CSV, or XLSX action.
+- **Local snapshot:** the current origin can read the snapshot; other tabs do not automatically import it and no `storage` event synchronizes state.
+- **Dependencies → CI → Pages:** lockfile-pinned packages run in a read-only build job. Only the downstream deploy job has `pages: write` and `id-token: write`.
 
 ## Assets and security objectives
 
-| Asset | Why it matters | Security objective (C/I/A) |
-|---|---|---|
-| Financial scenario inputs | May reveal property value, loan size, rates, and available liquidity | C, I |
-| Calculation formulas and schedules | Incorrect results may cause poor financial decisions | I, A |
-| Share fragments | Carry complete user-controlled scenarios and may disclose inputs | C, I |
-| Exported CSV/XLSX files | Users may rely on them as an audit record | I |
-| CI credentials and Pages artifact | Compromise could publish malicious calculator code | C, I, A |
-| Public site availability | Users expect the calculator to load and respond | A |
+| Asset | Objective |
+|---|---|
+| Loan values, income assumptions, fees, and liquidity | Confidentiality and integrity |
+| Calculation formulas, schedules, and solver outputs | Integrity and availability |
+| Shared fragments and remembered snapshot | Confidentiality, integrity, explicit user control |
+| CSV/XLSX/print records | Integrity |
+| Pages artifact and deployment credentials | Integrity, confidentiality, availability |
 
-## Attacker model
+## Threats and controls
 
-### Capabilities
+| ID | Threat | Controls | Residual risk |
+|---|---|---|---|
+| TM-001 | Crafted URL or stored JSON crashes the app or injects invalid state. | 8,000-character share cap; strict declared-field parsing; version checks; atomic rejection; 100-entry list caps; safe defaults and browser recovery tests. | Low: plausible valid values can still be altered by a link sender. Recipients must verify visible inputs. |
+| TM-002 | Financial data is transmitted without consent. | No runtime network APIs, backend, telemetry, cookies, remote assets, or service worker; fragment data is not part of the HTTP request; exports and sharing require explicit actions. | Low: copied links, clipboard managers, browser history, messages, screenshots, and exported files can disclose data after the user chooses to share them. |
+| TM-003 | Remembered state leaks across tabs or devices. | Only one explicit local snapshot; no automatic restore or storage-event listener; each tab keeps independent active state; browser-origin storage never synchronizes to another machine through the app. | Low: anyone with access to the same browser profile/origin may read or restore the snapshot. Private browsing and browser sync policies are outside the app. |
+| TM-004 | Formula, rounding, event order, or stale-result behavior misleads users. | Pure typed engines; unit/golden/invariant tests; field-keyed validation; last-valid result is labelled; share/print/export disabled while current inputs are invalid; educational disclaimer. | Medium: lender-specific rules and future rate behavior can differ from estimates. |
+| TM-005 | Maximum schedules or lists freeze the main thread. | Bounded dates, tenures, principal/rate ranges, and 100-entry lists; direct cycle indexes; deterministic performance tests; graph/schedule deferred below the fold. | Low under supported limits. |
+| TM-006 | Spreadsheet content becomes an injection vector. | Exported cells are generated from validated typed values and fixed labels; CSV remains machine-readable; XLSX dates/numbers/percentages/integers/Booleans are native cells. | Low. Reassess if free-form user text is exported. |
+| TM-007 | Dependency or workflow compromise publishes malicious assets. | Exact dependency lockfile, `npm ci --ignore-scripts`, production audit, Dependabot, immutable action SHAs, read-only build job, separate privileged deploy job, verified artifact. | Low but ongoing; trusted build dependencies still execute during build/test. |
+| TM-008 | A framing site presents deceptive instructions around the calculator. | No account, payment, server write, or privileged runtime action. | Accepted low risk on GitHub Pages, which cannot set a repository-controlled `frame-ancestors` response header. |
 
-- A remote attacker can craft and send a calculator URL with an arbitrary fragment up to 8,000 characters.
-- A dependency or GitHub Action maintainer compromise could affect a future build.
-- A malicious site can link to or frame the public calculator.
-- A recipient of a shared URL can read and modify all encoded financial inputs.
+## Security-sensitive files
 
-### Non-capabilities
+- `src/lib/suite-codec.ts`, `src/lib/share.ts`: external-state boundary.
+- `src/lib/remembered-scenario.ts`: explicit local persistence boundary.
+- `src/domain/amortization/`, `src/domain/calculators/`, `src/domain/loan/`: calculation integrity.
+- `src/lib/exports.ts`: file-generation boundary and lazy ExcelJS import.
+- `src/App.tsx`: provenance, reset, restore, sharing, export, and lazy-loading orchestration.
+- `.github/workflows/deploy.yml`, `package.json`, `package-lock.json`: supply chain and release permissions.
 
-- There is no server, database, account, session, authorization boundary, upload parser, or application secret to attack.
-- URL fragments are not sent in HTTP requests to GitHub Pages.
-- The app performs no runtime fetch, SSRF-capable request, dynamic code execution, or raw HTML insertion.
-- An attacker cannot persist changes for other users without compromising the deployed artifact or convincing them to open a link.
+## Reassessment triggers
 
-## Entry points and attack surfaces
+Perform a new threat model before adding a backend, authentication, accounts, cloud sync, telemetry, advertisements, tag managers, remote fonts/scripts, payment flows, free-form exported text, lender integrations, or claims of regulated/lender-approved advice. Re-run dependency and workflow review on toolchain upgrades.
 
-| Surface | How reached | Trust boundary | Notes | Evidence (repo path / symbol) |
-|---|---|---|---|---|
-| Form inputs | Direct browser interaction | User → UI/engine | Numeric/date ranges and 100-entry caps apply before schedule generation | `src/App.tsx:NumberField`; `src/domain/loan/index.ts:validateScenario` |
-| URL fragment | Opening a shared link | Internet/link → decoder | Strict all-or-nothing parsing of supplied declared fields; unknown fields are discarded | `src/lib/share.ts:decodeScenario`; `src/lib/share.test.ts` |
-| Clipboard share | Explicit button | App → OS clipboard/history | Complete scenario is intentionally disclosed | `src/lib/share.ts:copyScenarioUrl` |
-| CSV/XLSX exports | Explicit buttons | App → local filesystem | Values originate in the validated result model | `src/lib/exports.ts` |
-| GitHub Actions | Push or manual dispatch | Source/dependencies → CI/Pages | Read-only build and privileged deploy are separate; actions use immutable commits | `.github/workflows/deploy.yml`; `.github/dependabot.yml` |
-| npm dependency graph | `npm ci --ignore-scripts`, lazy XLSX import | Registry → build/runtime bundle | Exact versions, lockfile, ignored install scripts, lazy loading, and update automation reduce but do not eliminate risk | `package-lock.json`; `package.json`; `.github/dependabot.yml` |
+## Verification checklist
 
-## Reviewed abuse paths and disposition
-
-1. A malformed valid-version fragment is rejected as a unit and defaults load with a warning. Deep decoder and browser recovery tests cover this path. **TM-001 Resolved.**
-2. A received scenario displays a persistent provenance notice that tells the recipient to verify inputs. **TM-002 Resolved.**
-3. Copying a share link still places the complete scenario in downstream clipboard/history/chat systems, but the action is explicit and warns about disclosure. **TM-003 Resolved with documented user-controlled disclosure.**
-4. Large recurring-prepayment lists use direct cycle indexes and every optional list has a 100-entry cap. **TM-005 Resolved.**
-5. npm code runs in the read-only build job; immutable actions and a separate privileged deploy job limit artifact-publishing exposure. **TM-004 Resolved with low supply-chain residual risk.**
-6. A framing site can still present deceptive surrounding content. The calculator has no account, payment, data-write, or other privileged runtime action. **TM-006 Accepted, low residual risk.**
-
-## Threat model table
-
-| Threat ID | Threat action and impact | Status | Implementing evidence | Regression or operational evidence | Residual risk |
-|---|---|---|---|---|---|
-| TM-001 | Malformed nested fragment values crash a recipient's calculation. | **Resolved** | `e73b736`, `8eec604`: strict declared-field parsing, nested validation, list caps, and safe fallback in `src/lib/share.ts`. | Malformed, unknown-key, nested-field, ID, and length cases in `src/lib/share.test.ts`; browser recovery in `e2e/sharing-errors.spec.ts`. | Low: a recipient can still open arbitrary links, but invalid state does not enter the engine. |
-| TM-002 | A recipient trusts attacker-modified but plausible financial inputs. | **Resolved** | `a9218f7`: persistent shared-link provenance and verification notice in `src/App.tsx`. | Provenance reset and new-context round-trip cases in `e2e/sharing-errors.spec.ts`. | Low: recipients must still review visible inputs; the app cannot authenticate a sender. |
-| TM-003 | A copied URL exposes financial inputs through clipboard, history, chat, or screenshots. | **Resolved** | Existing fragment-only, explicit-copy architecture plus `a9218f7` trusted-state handling; no runtime network transmission. | Copy warning and cross-context share cases in `src/App.tsx` and `e2e/sharing-errors.spec.ts`. | Low: disclosure remains intentional and user-controlled once a link leaves the browser. |
-| TM-004 | A compromised dependency or action publishes malicious Pages assets or accesses CI credentials. | **Resolved** | `a231459`: `npm ci --ignore-scripts`, immutable action commits, read-only build job, separate Pages/OIDC deploy job, exact toolchain, and Dependabot. | `.github/workflows/deploy.yml` verifies before artifact upload and grants write permissions only to `deploy`; Pages-subpath e2e runs in `build`. | Low: trusted build dependencies still execute during test/build and require updates and review. |
-| TM-005 | Maximum optional lists and recurring prepayments freeze the main thread. | **Resolved** | `5257de2`, `938e53f`: direct cycle indexes, integer recurrence, and 100-entry caps for rate changes, prepayments, and OD transactions. | Supported-maximum timing plus frequency/index/list-limit cases in `src/domain/loan/loan.test.ts`. | Low: the bounded daily OD ledger still runs on the main thread but remains within the supported horizon. |
-| TM-006 | A framing site overlays deceptive instructions and induces sharing. | **Accepted** | The runtime has no account, payment, server-side data write, or other privileged action. | Reassess after hosting changes or any privileged runtime feature. | **Low residual risk.** A custom header-capable host becomes appropriate if privileged actions are added. |
-
-## Criticality calibration
-
-- Critical: remote code execution in all visitors’ browsers, CI credential theft enabling organization-wide compromise, or silent cross-user data exfiltration. No current example was found.
-- High: malicious artifact publication, systematic silent calculation tampering, or automatic transmission of all financial scenarios. TM-004 has high potential impact but low likelihood and existing controls, so it is medium overall.
-- Medium: crafted-link crashes, plausible scenario tampering, share-link disclosure, or reliable browser freezes affecting one recipient. The hardening controls resolved these identified paths; their remaining risks are low under the current static architecture.
-- Low: visual deception without a privileged action, verbose errors without sensitive data, or a recoverable local export failure. TM-006 is low.
-
-## Focus paths for security review
-
-| Path | Why it matters | Related Threat IDs |
-|---|---|---|
-| `src/lib/share.ts` | Parses the only remote attacker-controlled runtime input | TM-001, TM-002, TM-003 |
-| `src/domain/loan/index.ts` | Integrity-critical calculations, validation, direct recurrence indexing, and bounded daily ledger | TM-001, TM-002, TM-005 |
-| `src/App.tsx` | Controls provenance messages, share/export actions, and error behavior | TM-002, TM-003 |
-| `src/lib/exports.ts` | Moves calculated data into local files and loads the largest dependency | TM-003, TM-004 |
-| `.github/workflows/deploy.yml` | Holds deployment permissions and executes third-party code | TM-004 |
-| `package.json` | Defines runtime/build dependencies and scripts | TM-004 |
-| `package-lock.json` | Pins the transitive dependency graph | TM-004 |
-
-## Quality check
-
-- [x] Covered form, fragment, clipboard, export, dependency, CI, and hosting entry points.
-- [x] Covered user/browser, shared-link/browser, registry/CI, and CI/Pages boundaries.
-- [x] Separated production runtime from CI/build and tests.
-- [x] Recorded that deployment assumptions were requested but not confirmed.
-- [x] Listed assumptions and context changes that require a new threat model.
+- [x] Malformed shared and remembered state is rejected.
+- [x] Independent tabs do not synchronize active calculations.
+- [x] No runtime network, cookie, service-worker, or storage-listener path exists.
+- [x] Share/export/print/persistence require explicit actions.
+- [x] Calculation reconciliation and supported-maximum performance are tested.
+- [x] Production dependencies report no known vulnerability.
+- [x] GitHub Actions separate verification and deployment privileges.
