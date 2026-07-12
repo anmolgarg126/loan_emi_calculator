@@ -72,6 +72,8 @@ test('replaces zero amounts and formats them after editing', async ({ page }) =>
 test('shows rupee words for percentage-based amount fields', async ({ page }) => {
   await page.goto('./?calculator=home')
   await expect(page.locator('#down-payment-amount')).toHaveText('Equivalent: ₹10,00,000 · Ten lakh rupees')
+  await expect(page.getByLabel('Calculated loan amount')).toHaveValue('40,00,000')
+  await expect(page.locator('#loan-amount-words')).toHaveText('₹40,00,000 · Forty lakh rupees')
   await expect(page.locator('#interest-rate-amount')).toHaveCount(0)
 
   await page.getByRole('tab', { name: 'Car' }).click()
