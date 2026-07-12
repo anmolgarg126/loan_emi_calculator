@@ -1,28 +1,25 @@
 import { lazy, Suspense, useEffect, useReducer, useState } from 'react'
 import { CalculatorShell } from './components/CalculatorShell'
+import { ResultSummary } from './components/ResultSummary'
 import { CarForm } from './components/calculators/CarForm'
 import { EducationForm } from './components/calculators/EducationForm'
 import { GenericForm } from './components/calculators/GenericForm'
 import { HomeForm } from './components/calculators/HomeForm'
 import { PersonalForm } from './components/calculators/PersonalForm'
-import type { CalculatorKind, SolverKind, SuiteScenario, UnifiedViewResult } from './domain/calculators'
+import type { CalculatorKind, SolverKind, SuiteScenario } from './domain/calculators'
 import { formatCurrency } from './domain/loan'
 import { copyScenarioUrl } from './lib/share'
 import { createInitialSuiteModel, reduceSuiteModel } from './lib/suite-state'
+import { deleteRememberedScenario, readRememberedScenario, saveRememberedScenario } from './lib/remembered-scenario'
 
 const SolverForm = lazy(() => import('./components/calculators/SolverForm').then((module) => ({ default: module.SolverForm })))
-
-const formatMetric = (metric: UnifiedViewResult['metrics'][number]) => {
-  if (metric.format === 'currency') return formatCurrency(Number(metric.value))
-  if (metric.format === 'percentage') return `${Number(metric.value).toFixed(2)}%`
-  if (metric.format === 'date') return new Date(`${metric.value}T00:00:00Z`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })
-  return String(metric.value)
-}
 
 function App() {
   const [model, dispatch] = useReducer(reduceSuiteModel, undefined, () => createInitialSuiteModel())
   const [solver, setSolver] = useState<SolverKind | null>(null)
-  const [status, setStatus] = useState(() => window.location.hash && !model.shared ? 'The shared scenario link was invalid and has been ignored.' : '')
+  const [status, setStatus] = useState(() => model.shared ? 'Loaded from a shared link.' : window.location.hash ? 'The shared scenario link was invalid and has been ignored.' : '')
+  const [hasRemembered, setHasRemembered] = useState(() => Boolean(readRememberedScenario()))
+  const [exporting, setExporting] = useState(false)
   const current = model.currentResult
   const displayed = current.view.errors.length === 0 || model.lastValidResult.kind !== current.kind
     ? current : model.lastValidResult
@@ -59,6 +56,48 @@ function App() {
       setStatus(error instanceof Error ? error.message : 'Unable to create a share link.')
     }
   }
+  const remember = () => {
+    const saved = saveRememberedScenario(model.scenario)
+    setHasRemembered(saved || hasRemembered)
+    setStatus(saved ? 'Scenario remembered on this device. It is restored only when you choose Restore saved.' : 'This browser blocked local storage. The scenario was not saved.')
+  }
+  const restore = () => {
+    const scenario = readRememberedScenario()
+    if (!scenario) {
+      setHasRemembered(false)
+      setStatus('No valid saved scenario was found.')
+      return
+    }
+    const url = new URL(window.location.href)
+    url.searchParams.set('calculator', scenario.kind)
+    url.hash = ''
+    window.history.replaceState(null, '', url)
+    dispatch({ type: 'restore', scenario })
+    setStatus('Saved scenario restored into this tab.')
+  }
+  const removeRemembered = () => {
+    const deleted = deleteRememberedScenario()
+    if (deleted) setHasRemembered(false)
+    setStatus(deleted ? 'Saved scenario deleted. Your current calculator is unchanged.' : 'This browser could not delete the saved scenario.')
+  }
+  const exportCsv = async () => {
+    const { downloadSuiteCsv } = await import('./lib/exports')
+    downloadSuiteCsv(displayed)
+    setStatus('CSV schedule downloaded.')
+  }
+  const exportXlsx = async () => {
+    setExporting(true)
+    setStatus('Preparing typed Excel workbook…')
+    try {
+      const { downloadSuiteXlsx } = await import('./lib/exports')
+      await downloadSuiteXlsx(displayed)
+      setStatus('Excel workbook downloaded.')
+    } catch {
+      setStatus('Excel export failed. Your calculation is unchanged.')
+    } finally {
+      setExporting(false)
+    }
+  }
 
   const form = (() => {
     switch (model.scenario.kind) {
@@ -70,17 +109,7 @@ function App() {
     }
   })()
 
-  const resultPanel = <div className="results-sticky">
-    <div className="result-heading"><div><span>{current.kind === 'home' ? 'Home loan result' : `${current.kind[0]?.toUpperCase()}${current.kind.slice(1)} loan result`}</span><h2>Your repayment view</h2></div><button type="button" className="text-button" onClick={() => dispatch({ type: 'reset', now: Date.now() })}>Reset calculator</button></div>
-    {current.view.errors.length > 0 && <div className="validation-summary" role="alert"><strong>Check the highlighted inputs.</strong><p>The figures below remain the last valid estimate.</p><ul>{current.view.errors.slice(0, 4).map((error) => <li key={error}>{error}</li>)}</ul></div>}
-    <div className="primary-result"><span>{displayed.view.primary.label}</span><strong>{formatMetric(displayed.view.primary)}</strong><small>{displayed.kind === 'home' ? 'Standard loan before optional OD comparison' : 'Based on the current scenario'}</small></div>
-    <dl className="metric-list">{displayed.view.metrics.map((metric) => <div key={metric.id}><dt>{metric.label}</dt><dd>{formatMetric(metric)}</dd></div>)}</dl>
-    <div className="result-actions">
-      <button type="button" className="primary-button" onClick={share} disabled={current.view.errors.length > 0}>Share scenario</button>
-      {model.undo && <button type="button" className="secondary-button" onClick={() => dispatch({ type: 'undo-reset', now: Date.now() })}>Undo reset</button>}
-    </div>
-    {status && <p className="status-message" aria-live="polite">{status}</p>}
-  </div>
+  const resultPanel = <ResultSummary current={current} displayed={displayed} shared={model.shared} hasUndo={Boolean(model.undo)} hasRemembered={hasRemembered} exporting={exporting} status={status} onReset={() => dispatch({ type: 'reset', now: Date.now() })} onUndo={() => dispatch({ type: 'undo-reset', now: Date.now() })} onRemember={remember} onRestore={restore} onDeleteRemembered={removeRemembered} onShare={share} onPrint={() => window.print()} onCsv={exportCsv} onXlsx={exportXlsx} />
 
   const schedule = <section className="suite-schedule" aria-labelledby="schedule-title">
     <div className="section-heading"><div><h2 id="schedule-title">Payment schedule</h2><p>Accessible monthly detail behind every summary figure.</p></div><span>{displayed.view.schedule.length} payments</span></div>

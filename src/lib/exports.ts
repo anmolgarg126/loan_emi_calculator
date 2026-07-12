@@ -1,4 +1,5 @@
 import type { CalculationResult } from '../domain/loan'
+import type { SuiteResult } from '../domain/calculators'
 
 const downloadBlob = (blob: Blob, filename: string) => {
   const url = URL.createObjectURL(blob)
@@ -220,4 +221,181 @@ export const downloadXlsx = async (result: CalculationResult) => {
     new Blob([buffer as BlobPart], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }),
     'loan-ledger.xlsx',
   )
+}
+
+export const createSuiteCsv = (result: SuiteResult) => {
+  const headers = ['Period', 'Payment date', 'Payment', 'Principal', 'Interest', 'Prepayment', 'Costs', 'Balance', 'OD net utilized']
+  const rows = result.view.schedule.map((row) => [
+    row.period,
+    row.date,
+    row.payment,
+    row.principal,
+    row.interest,
+    row.prepayment,
+    row.costs,
+    row.balance,
+    row.odNetUtilized ?? '',
+  ])
+  return [headers, ...rows].map((row) => row.map(csvCell).join(',')).join('\n')
+}
+
+const suiteAssumptions = (result: SuiteResult) => {
+  switch (result.kind) {
+    case 'generic': return [
+      ['Principal', result.scenario.principal, 'INR'],
+      ['Annual interest rate', result.scenario.annualRate / 100, 'percentage'],
+      ['Tenure', result.scenario.tenureMonths, 'months'],
+      ['First EMI date', asDate(result.scenario.startDate), 'date'],
+      ['Processing fee', result.scenario.processingFee, 'INR'],
+    ]
+    case 'home': return [
+      ['Home value', result.scenario.homeValue, 'INR'],
+      ['Loan amount', result.native.loanAmount, 'INR'],
+      ['Annual interest rate', result.scenario.annualRate / 100, 'percentage'],
+      ['Tenure', result.scenario.tenureMonths, 'months'],
+      ['Loan start', asDate(result.scenario.startDate), 'date'],
+      ['OD enabled', result.scenario.od.enabled, 'boolean'],
+    ]
+    case 'car': return [
+      ['Vehicle price', result.scenario.vehiclePrice, 'INR'],
+      ['Financed principal', result.native.financedPrincipal, 'INR'],
+      ['Annual interest rate', result.scenario.annualRate / 100, 'percentage'],
+      ['Tenure', result.scenario.tenureMonths, 'months'],
+      ['First EMI date', asDate(result.scenario.startDate), 'date'],
+      ['Registration financed', result.scenario.financeRegistrationFees, 'boolean'],
+    ]
+    case 'personal': return [
+      ['Requested principal', result.scenario.principal, 'INR'],
+      ['Net disbursed', result.native.netDisbursed, 'INR'],
+      ['Quoted annual rate', result.scenario.quotedAnnualRate / 100, 'percentage'],
+      ['Effective APR', result.native.effectiveApr / 100, 'percentage'],
+      ['Tenure', result.scenario.tenureMonths, 'months'],
+      ['First EMI date', asDate(result.scenario.startDate), 'date'],
+    ]
+    case 'education': return [
+      ['Course cost', result.scenario.courseCost, 'INR'],
+      ['Total disbursed', result.native.totalDisbursed, 'INR'],
+      ['Study annual rate', result.scenario.studyAnnualRate / 100, 'percentage'],
+      ['Repayment annual rate', result.scenario.repaymentAnnualRate / 100, 'percentage'],
+      ['Study start', asDate(result.scenario.startDate), 'date'],
+      ['Repayment start', asDate(result.native.repaymentStartDate), 'date'],
+    ]
+  }
+}
+
+export const buildSuiteWorkbook = async (result: SuiteResult) => {
+  const { Workbook } = await import('exceljs')
+  const workbook = new Workbook()
+  workbook.creator = 'Loan EMI Calculator'
+  workbook.created = new Date()
+  workbook.calcProperties.fullCalcOnLoad = true
+  const moneyFormat = '₹#,##0.00;[Red]-₹#,##0.00'
+  const percentFormat = '0.00%'
+
+  const assumptions = workbook.addWorksheet('Assumptions', { views: [{ state: 'frozen', ySplit: 1 }] })
+  assumptions.columns = [
+    { header: 'Assumption', key: 'label', width: 32 },
+    { header: 'Value', key: 'value', width: 22 },
+    { header: 'Unit / basis', key: 'unit', width: 24 },
+  ]
+  suiteAssumptions(result).forEach(([label, value, unit]) => assumptions.addRow({ label, value, unit }))
+  assumptions.eachRow((row, index) => {
+    if (index === 1) return
+    const unit = row.getCell(3).value
+    if (unit === 'INR') row.getCell(2).numFmt = moneyFormat
+    if (unit === 'percentage') row.getCell(2).numFmt = percentFormat
+    if (unit === 'months') row.getCell(2).numFmt = '0'
+    if (unit === 'date') row.getCell(2).numFmt = 'dd-mmm-yyyy'
+  })
+
+  const monthly = workbook.addWorksheet('Monthly Schedule', { views: [{ state: 'frozen', ySplit: 1 }] })
+  monthly.columns = [
+    { header: 'Period', key: 'period', width: 10 },
+    { header: 'Payment date', key: 'date', width: 16 },
+    { header: 'Payment', key: 'payment', width: 18 },
+    { header: 'Principal', key: 'principal', width: 18 },
+    { header: 'Interest', key: 'interest', width: 18 },
+    { header: 'Prepayment', key: 'prepayment', width: 18 },
+    { header: 'Costs', key: 'costs', width: 18 },
+    { header: 'Balance', key: 'balance', width: 18 },
+    { header: 'OD net utilized', key: 'odNetUtilized', width: 20 },
+  ]
+  result.view.schedule.forEach((row) => monthly.addRow({ ...row, date: asDate(row.date), odNetUtilized: row.odNetUtilized ?? null }))
+  monthly.getColumn('period').numFmt = '0'
+  monthly.getColumn('date').numFmt = 'dd-mmm-yyyy'
+  ;['payment', 'principal', 'interest', 'prepayment', 'costs', 'balance', 'odNetUtilized'].forEach((key) => (monthly.getColumn(key).numFmt = moneyFormat))
+
+  if (result.kind === 'home') {
+    const summary = workbook.addWorksheet('Comparison Summary')
+    summary.addRows([
+      ['Metric', 'Standard loan', 'OD loan'],
+      ['Total interest', result.native.standard.totalInterest, result.native.od.totalInterest],
+      ['Fees', 0, result.native.od.totalFees],
+      ['Fee-adjusted savings', 0, result.native.od.feeAdjustedSavings],
+    ])
+    summary.getCell('C4').value = { formula: 'B2-C2-C3', result: result.native.od.feeAdjustedSavings }
+    summary.getColumn(2).numFmt = moneyFormat
+    summary.getColumn(3).numFmt = moneyFormat
+    const transactions = workbook.addWorksheet('OD Transactions')
+    transactions.addRow(['Date', 'Type', 'Amount', 'Enabled'])
+    result.scenario.od.transactions.forEach((item) => transactions.addRow([asDate(item.date), item.type, item.amount, result.scenario.od.enabled && result.scenario.od.transactionsEnabled]))
+    transactions.getColumn(1).numFmt = 'dd-mmm-yyyy'
+    transactions.getColumn(3).numFmt = moneyFormat
+  }
+  if (result.kind === 'car') {
+    const sheet = workbook.addWorksheet('Balloon and Ownership Summary')
+    sheet.addRows([
+      ['Metric', 'Value'],
+      ['Balloon amount', result.native.balloonAmount],
+      ['Ownership horizon', result.scenario.ownershipMonths],
+      ['Remaining settlement', result.native.remainingLoanSettlement],
+      ['Expected resale value', result.scenario.expectedResaleValue],
+      ['Net ownership cost', result.native.netOwnershipCost],
+    ])
+    sheet.getColumn(2).numFmt = moneyFormat
+    sheet.getCell('B3').numFmt = '0'
+  }
+  if (result.kind === 'personal') {
+    const sheet = workbook.addWorksheet('Deductions and APR Summary')
+    sheet.addRows([
+      ['Metric', 'Value'],
+      ['Processing fee', result.native.processingFeeAmount],
+      ['GST', result.native.gstAmount],
+      ['Insurance deduction', result.native.insuranceDeduction],
+      ['Other deduction', result.native.otherDeduction],
+      ['Net disbursed', result.native.netDisbursed],
+      ['Effective APR', result.native.effectiveApr / 100],
+    ])
+    sheet.getColumn(2).numFmt = moneyFormat
+    sheet.getCell('B7').numFmt = percentFormat
+  }
+  if (result.kind === 'education') {
+    const disbursements = workbook.addWorksheet('Disbursements')
+    disbursements.addRow(['ID', 'Date', 'Amount'])
+    result.scenario.disbursements.forEach((item) => disbursements.addRow([item.id, asDate(item.date), item.amount]))
+    disbursements.getColumn(2).numFmt = 'dd-mmm-yyyy'
+    disbursements.getColumn(3).numFmt = moneyFormat
+    const phases = workbook.addWorksheet('Phase Summary')
+    phases.addRow(['Date', 'Phase', 'Disbursement', 'Interest serviced', 'Outstanding principal', 'Accrued interest'])
+    result.native.phaseRows.forEach((row) => phases.addRow([asDate(row.date), row.phase, row.disbursement, row.payment, row.outstandingPrincipal, row.accruedInterest]))
+    phases.getColumn(1).numFmt = 'dd-mmm-yyyy'
+    ;[3, 4, 5, 6].forEach((column) => (phases.getColumn(column).numFmt = moneyFormat))
+  }
+
+  workbook.worksheets.forEach((worksheet) => {
+    if (worksheet.rowCount > 1) worksheet.autoFilter = `A1:${worksheet.getCell(1, worksheet.columnCount).address}`
+    worksheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } }
+    worksheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0D675F' } }
+  })
+  return workbook
+}
+
+export const downloadSuiteCsv = (result: SuiteResult) => {
+  downloadBlob(new Blob([createSuiteCsv(result)], { type: 'text/csv;charset=utf-8' }), `${result.kind}-loan-schedule.csv`)
+}
+
+export const downloadSuiteXlsx = async (result: SuiteResult) => {
+  const workbook = await buildSuiteWorkbook(result)
+  const buffer = await workbook.xlsx.writeBuffer()
+  downloadBlob(new Blob([buffer as BlobPart], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), `${result.kind}-loan-analysis.xlsx`)
 }

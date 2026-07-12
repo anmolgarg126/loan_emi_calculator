@@ -1,8 +1,41 @@
 import { describe, expect, it } from 'vitest'
 import { calculateLoan, defaultScenario, formatCurrency } from '../domain/loan'
-import { buildWorkbook, createCsv } from './exports'
+import { calculateSuite, defaultSuiteScenario } from '../domain/calculators'
+import { buildSuiteWorkbook, buildWorkbook, createCsv, createSuiteCsv } from './exports'
 
 describe('exports', () => {
+  it.each(['generic', 'home', 'car', 'personal', 'education'] as const)(
+    'exports machine-readable %s CSV rows',
+    (kind) => {
+      const result = calculateSuite(defaultSuiteScenario(kind))
+      const csv = createSuiteCsv(result)
+      const [header, ...rows] = csv.split('\n').map((line) => line.split(','))
+
+      expect(header).toEqual(['Period', 'Payment date', 'Payment', 'Principal', 'Interest', 'Prepayment', 'Costs', 'Balance', 'OD net utilized'])
+      expect(rows).toHaveLength(result.view.schedule.length)
+      expect(csv).not.toContain('₹')
+    },
+  )
+
+  it.each(['generic', 'home', 'car', 'personal', 'education'] as const)(
+    'exports typed %s workbook data',
+    async (kind) => {
+      const result = calculateSuite(defaultSuiteScenario(kind))
+      const workbook = await buildSuiteWorkbook(result)
+      const serialized = await workbook.xlsx.writeBuffer()
+      const { Workbook } = await import('exceljs')
+      const reopened = new Workbook()
+      await reopened.xlsx.load(serialized)
+
+      expect(reopened.getWorksheet('Assumptions')?.getCell('B2').value).not.toBeNull()
+      const monthly = reopened.getWorksheet('Monthly Schedule')!
+      expect(monthly.getCell('B2').value).toBeInstanceOf(Date)
+      expect(typeof monthly.getCell('C2').value).toBe('number')
+      expect(typeof monthly.getCell('D2').value).toBe('number')
+      expect(monthly.getCell('C2').numFmt).toContain('₹')
+    },
+  )
+
   it('formats currency consistently and treats non-finite values as zero', () => {
     const formatted = formatCurrency(1_234.56, 2)
     expect(formatCurrency(1_234.56, 2)).toBe(formatted)

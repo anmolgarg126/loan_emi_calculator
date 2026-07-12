@@ -89,6 +89,8 @@ main { width: min(1440px, 100%); margin: 0 auto; }
 .secondary-button { padding: 0 14px; border: 1px solid var(--line); background: var(--surface); color: var(--accent); }
 .secondary-button:hover { border-color: var(--accent); background: var(--accent-soft); }
 .status-message { padding: 12px; border-radius: var(--radius-sm); background: var(--accent-soft); color: #164d49; font-size: 13px; line-height: 1.45; }
+.shared-badge { padding: 10px 12px; border-radius: var(--radius-sm); background: var(--accent-soft); color: #164d49; font-size: 12px; font-weight: 650; }
+.danger-button { color: var(--danger); }
 
 .guided-form { border-top: 1px solid var(--line); }
 .guided-section { border-bottom: 1px solid var(--line); }
