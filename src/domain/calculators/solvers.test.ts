@@ -183,6 +183,33 @@ describe('prepayment comparison', () => {
     ))
   })
 
+  it('preserves a reset on the prepayment row and recasts on the following cycle', () => {
+    const base = scenario()
+    const date = addMonths(base.startDate, 6)
+    base.rateChanges = [{
+      id: 'same-cycle-reset',
+      date,
+      annualRate: 12,
+      mode: 'keep-emi',
+    }]
+    const result = comparePrepayment({
+      scenario: base,
+      prepayments: [prepayment({ date, amount: 50_000 })],
+      mode: 'keep-tenure',
+    })
+    const scheduled = ({ payment, principal, interest }: typeof result.modified.schedule[number]) => ({
+      payment,
+      principal,
+      interest,
+    })
+
+    expect(scheduled(result.modified.schedule[6]!)).toEqual(scheduled(result.baseline.schedule[6]!))
+    expect(result.modified.schedule[6]?.prepayment).toBe(50_000)
+    expect(result.modified.schedule[7]?.payment).not.toBe(result.baseline.schedule[7]?.payment)
+    expect(result.modified.schedule).toHaveLength(result.baseline.schedule.length)
+    expect(result.modifiedPayoff).toBe(result.originalPayoff)
+  })
+
   it('rejects a keep-tenure prepayment that necessarily pays off early', () => {
     expect(() => comparePrepayment({
       scenario: scenario(),

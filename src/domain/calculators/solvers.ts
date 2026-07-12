@@ -159,7 +159,7 @@ const keepTenureChanges = (
     const changeCycle = cycleIndex(scenario.startDate, change.date)!
     return [change.date, {
       ...change,
-      mode: changeCycle < firstPrepaymentCycle ? change.mode : 'keep-tenure' as const,
+      mode: changeCycle <= firstPrepaymentCycle ? change.mode : 'keep-tenure' as const,
     }]
   }))
   prepayments.forEach((item) => {
