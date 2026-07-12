@@ -11,6 +11,7 @@ export type { GenericResult } from './generic'
 export { calculateCar, defaultCarScenario } from './car'
 export { calculatePersonal, defaultPersonalScenario } from './personal'
 export { calculateEducation, defaultEducationScenario } from './education'
+export * from './solvers'
 
 export function defaultSuiteScenario(kind: 'generic'): { kind: 'generic'; value: GenericScenario }
 export function defaultSuiteScenario(kind: 'home'): { kind: 'home'; value: LoanScenario }
