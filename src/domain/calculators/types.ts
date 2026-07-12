@@ -53,6 +53,39 @@ export interface CarResult {
   warnings: string[]
 }
 
+export interface PersonalScenario {
+  principal: number
+  quotedAnnualRate: number
+  quotationMode: 'reducing' | 'flat'
+  tenureMonths: number
+  startDate: string
+  processingFee: number
+  processingFeeMode: 'amount' | 'percent'
+  gstRate: number
+  insuranceDeduction: number
+  otherDeduction: number
+  prepayments: Prepayment[]
+}
+
+export interface PersonalResult {
+  quotedAnnualRate: number
+  effectiveApr: number
+  processingFeeAmount: number
+  gstAmount: number
+  insuranceDeduction: number
+  otherDeduction: number
+  totalDeductions: number
+  netDisbursed: number
+  initialEmi: number
+  totalInterest: number
+  totalRepayment: number
+  payoffDate: string
+  schedule: UnifiedScheduleRow[]
+  issues: ValidationIssue[]
+  errors: string[]
+  warnings: string[]
+}
+
 export interface ViewMetric {
   id: string
   label: string
@@ -85,8 +118,10 @@ export type SuiteScenario =
   | { kind: 'generic'; value: GenericScenario }
   | { kind: 'home'; value: LoanScenario }
   | { kind: 'car'; value: CarScenario }
+  | { kind: 'personal'; value: PersonalScenario }
 
 export type SuiteResult =
   | { kind: 'generic'; scenario: GenericScenario; view: UnifiedViewResult; native: import('./generic').GenericResult }
   | { kind: 'home'; scenario: LoanScenario; view: UnifiedViewResult; native: CalculationResult }
   | { kind: 'car'; scenario: CarScenario; view: UnifiedViewResult; native: CarResult }
+  | { kind: 'personal'; scenario: PersonalScenario; view: UnifiedViewResult; native: PersonalResult }

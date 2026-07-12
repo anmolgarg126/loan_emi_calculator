@@ -1,21 +1,50 @@
 import { calculateLoan, defaultScenario, type LoanScenario } from '../loan'
 import { calculateGeneric, defaultGenericScenario } from './generic'
 import { calculateCar, defaultCarScenario } from './car'
-import type { CarScenario, GenericScenario, SuiteResult, SuiteScenario, UnifiedScheduleRow } from './types'
+import { calculatePersonal, defaultPersonalScenario } from './personal'
+import type { CarScenario, GenericScenario, PersonalScenario, SuiteResult, SuiteScenario, UnifiedScheduleRow } from './types'
 
 export type * from './types'
 export { calculateGeneric, defaultGenericScenario } from './generic'
 export type { GenericResult } from './generic'
 export { calculateCar, defaultCarScenario } from './car'
+export { calculatePersonal, defaultPersonalScenario } from './personal'
 
 export function defaultSuiteScenario(kind: 'generic'): { kind: 'generic'; value: GenericScenario }
 export function defaultSuiteScenario(kind: 'home'): { kind: 'home'; value: LoanScenario }
 export function defaultSuiteScenario(kind: 'car'): { kind: 'car'; value: CarScenario }
-export function defaultSuiteScenario(kind: 'generic' | 'home' | 'car'): SuiteScenario {
+export function defaultSuiteScenario(kind: 'personal'): { kind: 'personal'; value: PersonalScenario }
+export function defaultSuiteScenario(kind: 'generic' | 'home' | 'car' | 'personal'): SuiteScenario {
   switch (kind) {
     case 'generic': return { kind, value: defaultGenericScenario() }
     case 'home': return { kind, value: defaultScenario() }
     case 'car': return { kind, value: defaultCarScenario() }
+    case 'personal': return { kind, value: defaultPersonalScenario() }
+  }
+}
+
+export const calculatePersonalAdapter = (scenario: PersonalScenario): Extract<SuiteResult, { kind: 'personal' }> => {
+  const native = calculatePersonal(scenario)
+  return {
+    kind: 'personal',
+    scenario,
+    native,
+    view: {
+      primary: { id: 'monthly-emi', label: 'Monthly EMI', value: native.initialEmi, format: 'currency' },
+      metrics: [
+        { id: 'quoted-rate', label: 'Quoted rate', value: native.quotedAnnualRate, format: 'percentage' },
+        { id: 'effective-apr', label: 'Effective APR', value: native.effectiveApr, format: 'percentage' },
+        { id: 'net-disbursed', label: 'Net amount received', value: native.netDisbursed, format: 'currency' },
+        { id: 'total-deductions', label: 'Total deductions', value: native.totalDeductions, format: 'currency' },
+        { id: 'total-interest', label: 'Total interest', value: native.totalInterest, format: 'currency' },
+        { id: 'total-repayment', label: 'Total repayment', value: native.totalRepayment, format: 'currency' },
+        { id: 'payoff-date', label: 'Payoff date', value: native.payoffDate, format: 'date' },
+      ],
+      schedule: native.schedule,
+      issues: native.issues,
+      errors: native.errors,
+      warnings: native.warnings,
+    },
   }
 }
 
@@ -99,11 +128,13 @@ export const calculateHomeAdapter = (scenario: LoanScenario): Extract<SuiteResul
 export function calculateSuite(scenario: Extract<SuiteScenario, { kind: 'generic' }>): Extract<SuiteResult, { kind: 'generic' }>
 export function calculateSuite(scenario: Extract<SuiteScenario, { kind: 'home' }>): Extract<SuiteResult, { kind: 'home' }>
 export function calculateSuite(scenario: Extract<SuiteScenario, { kind: 'car' }>): Extract<SuiteResult, { kind: 'car' }>
+export function calculateSuite(scenario: Extract<SuiteScenario, { kind: 'personal' }>): Extract<SuiteResult, { kind: 'personal' }>
 export function calculateSuite(scenario: SuiteScenario): SuiteResult
 export function calculateSuite(scenario: SuiteScenario): SuiteResult {
   switch (scenario.kind) {
     case 'generic': return calculateGeneric(scenario.value)
     case 'home': return calculateHomeAdapter(scenario.value)
     case 'car': return calculateCarAdapter(scenario.value)
+    case 'personal': return calculatePersonalAdapter(scenario.value)
   }
 }
