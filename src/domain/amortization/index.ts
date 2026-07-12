@@ -114,17 +114,37 @@ const prepaymentDue = (item: Prepayment, paymentCycle: number, startCycle: numbe
   return interval === 0 ? delta === 0 : delta % interval === 0
 }
 
+const fixedEmiCycles = (
+  balance: number,
+  annualRate: number,
+  emi: number,
+  balloonAmount: number,
+  maxCycles: number,
+) => {
+  let projectedBalance = balance
+  for (let cycle = 1; cycle <= maxCycles; cycle += 1) {
+    const interest = roundMoney(projectedBalance * (annualRate / 1200))
+    const amortizingBalance = roundMoney(Math.max(0, projectedBalance - balloonAmount))
+    const principal = roundMoney(Math.min(amortizingBalance, Math.max(0, emi - interest)))
+    if (principal <= 0 && amortizingBalance > 0.005) return null
+    if (principal >= amortizingBalance - 0.005) return cycle
+    projectedBalance = roundMoney(projectedBalance - principal)
+  }
+  return null
+}
+
 export const buildAmortizationSchedule = (input: AmortizationInput): AmortizationResult => {
   const errors: string[] = []
+  const warnings: string[] = []
   const rows: AmortizationRow[] = []
-  if (input.balloonAmount < 0 || input.balloonAmount >= input.principal) {
+  if (!Number.isFinite(input.balloonAmount) || input.balloonAmount < 0 || input.balloonAmount >= input.principal) {
     return {
       initialEmi: 0,
       totalInterest: 0,
       totalPrepayments: 0,
       payoffDate: input.startDate,
       rows,
-      errors: ['Balloon amount must be between ₹0 and the principal.'],
+      errors: ['Balloon amount must be finite, at least ₹0, and below the principal.'],
       warnings: [],
     }
   }
@@ -137,6 +157,7 @@ export const buildAmortizationSchedule = (input: AmortizationInput): Amortizatio
   let emi = calculateBalloonEmi(balance, annualRate, input.tenureMonths, input.balloonAmount)
   const initialEmi = emi
   let extensionAllowed = false
+  let finalPaymentMonth = input.tenureMonths - 1
 
   for (let month = 0; month < MAX_MONTHS && balance > 0.005; month += 1) {
     const periodStart = addMonths(input.startDate, month)
@@ -146,8 +167,18 @@ export const buildAmortizationSchedule = (input: AmortizationInput): Amortizatio
       annualRate = change.annualRate
       extensionAllowed = change.mode === 'keep-emi'
       if (change.mode === 'keep-tenure') {
-        const remaining = Math.max(1, input.tenureMonths - month)
+        finalPaymentMonth = Math.max(month, input.tenureMonths - 1)
+        const remaining = finalPaymentMonth - month + 1
         emi = calculateBalloonEmi(balance, annualRate, remaining, input.balloonAmount)
+      } else if (input.balloonAmount > 0) {
+        const remaining = fixedEmiCycles(
+          balance,
+          annualRate,
+          emi,
+          input.balloonAmount,
+          MAX_MONTHS - month,
+        )
+        finalPaymentMonth = remaining === null ? MAX_MONTHS : month + remaining - 1
       }
     }
 
@@ -156,17 +187,26 @@ export const buildAmortizationSchedule = (input: AmortizationInput): Amortizatio
       errors.push(`EMI is insufficient after the rate change effective ${periodStart}. Minimum EMI is ${roundMoney(interest + 0.01)}.`)
       break
     }
-    const isFinalFixedTenurePayment = month === input.tenureMonths - 1
-      && (input.balloonAmount > 0 || !extensionAllowed)
+    const amortizingBalance = roundMoney(Math.max(0, balance - input.balloonAmount))
+    const isBalloonPayoff = input.balloonAmount > 0
+      && (month === finalPaymentMonth || amortizingBalance <= 0.005)
+    const isFinalFixedTenurePayment = isBalloonPayoff
+      || (input.balloonAmount === 0 && !extensionAllowed && month === input.tenureMonths - 1)
     const principal = roundMoney(
-      isFinalFixedTenurePayment ? balance : Math.min(balance, Math.max(0, emi - interest)),
+      isFinalFixedTenurePayment
+        ? balance
+        : Math.min(input.balloonAmount > 0 ? amortizingBalance : balance, Math.max(0, emi - interest)),
     )
     const duePrepayment = roundMoney(
       prepayments
         .filter(({ item, startCycle }) => prepaymentDue(item, month + 1, startCycle))
         .reduce((sum, { item }) => sum + item.amount, 0),
     )
-    const prepayment = roundMoney(Math.min(Math.max(0, balance - principal), duePrepayment))
+    const prepaymentLimit = Math.max(0, balance - principal - input.balloonAmount)
+    const prepayment = roundMoney(Math.min(prepaymentLimit, duePrepayment))
+    if (input.balloonAmount > 0 && duePrepayment > prepaymentLimit + 0.005) {
+      warnings.push(`Prepayment on ${paymentDate} was capped to preserve the contractual balloon.`)
+    }
     balance = roundMoney(Math.max(0, balance - principal - prepayment))
     rows.push({
       month: month + 1,
@@ -188,6 +228,6 @@ export const buildAmortizationSchedule = (input: AmortizationInput): Amortizatio
     payoffDate: rows.at(-1)?.date ?? input.startDate,
     rows,
     errors,
-    warnings: [],
+    warnings,
   }
 }
