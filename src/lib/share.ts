@@ -5,6 +5,8 @@ import {
   type Prepayment,
   type RateChange,
 } from '../domain/loan'
+import type { SuiteScenario } from '../domain/calculators'
+import { parseSuiteScenarioJson, serializeSuiteScenario } from './suite-codec'
 
 const VERSION = 'v1'
 const MAX_FRAGMENT_LENGTH = 8_000
@@ -174,13 +176,43 @@ export const decodeScenario = (hash: string): LoanScenario | null => {
   }
 }
 
-export const scenarioUrl = (scenario: LoanScenario) => {
+export const encodeSuiteScenario = (scenario: SuiteScenario) => {
+  const fragment = `v2=${toBase64Url(serializeSuiteScenario(scenario))}`
+  if (fragment.length > MAX_FRAGMENT_LENGTH) throw new Error('This scenario is too large to share. Remove some dated entries.')
+  return fragment
+}
+
+export const decodeSharedScenario = (hash: string): SuiteScenario | null => {
+  const fragment = hash.replace(/^#/, '')
+  if (!fragment || fragment.length > MAX_FRAGMENT_LENGTH) return null
+  if (fragment.startsWith('v1=')) {
+    const value = decodeScenario(`#${fragment}`)
+    return value ? { kind: 'home', value } : null
+  }
+  if (!fragment.startsWith('v2=')) return null
+  try {
+    const payload = fragment.slice(3)
+    if (!payload || !/^[A-Za-z0-9_-]+$/.test(payload) || payload.length % 4 === 1) return null
+    const decoded = fromBase64Url(payload)
+    if (toBase64Url(decoded) !== payload) return null
+    return parseSuiteScenarioJson(decoded)
+  } catch {
+    return null
+  }
+}
+
+const asSuiteScenario = (scenario: SuiteScenario | LoanScenario): SuiteScenario =>
+  'kind' in scenario ? scenario : { kind: 'home', value: scenario }
+
+export const scenarioUrl = (scenario: SuiteScenario | LoanScenario) => {
+  const suite = asSuiteScenario(scenario)
   const base = new URL(import.meta.env.BASE_URL, window.location.origin)
-  base.hash = encodeScenario(scenario)
+  base.searchParams.set('calculator', suite.kind)
+  base.hash = encodeSuiteScenario(suite)
   return base.toString()
 }
 
-export const copyScenarioUrl = async (scenario: LoanScenario) => {
+export const copyScenarioUrl = async (scenario: SuiteScenario | LoanScenario) => {
   const url = scenarioUrl(scenario)
   await navigator.clipboard.writeText(url)
   return url

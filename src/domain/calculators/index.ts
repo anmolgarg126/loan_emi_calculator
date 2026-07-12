@@ -17,6 +17,7 @@ export function defaultSuiteScenario(kind: 'home'): { kind: 'home'; value: LoanS
 export function defaultSuiteScenario(kind: 'car'): { kind: 'car'; value: CarScenario }
 export function defaultSuiteScenario(kind: 'personal'): { kind: 'personal'; value: PersonalScenario }
 export function defaultSuiteScenario(kind: 'education'): { kind: 'education'; value: EducationScenario }
+export function defaultSuiteScenario(kind: 'generic' | 'home' | 'car' | 'personal' | 'education'): SuiteScenario
 export function defaultSuiteScenario(kind: 'generic' | 'home' | 'car' | 'personal' | 'education'): SuiteScenario {
   switch (kind) {
     case 'generic': return { kind, value: defaultGenericScenario() }

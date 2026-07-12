@@ -1,6 +1,9 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { defaultScenario } from '../domain/loan'
-import { decodeScenario, encodeScenario } from './share'
+import { defaultSuiteScenario } from '../domain/calculators'
+import { decodeScenario, decodeSharedScenario, encodeScenario, encodeSuiteScenario, scenarioUrl } from './share'
+
+afterEach(() => vi.unstubAllGlobals())
 
 const encodeRaw = (payload: unknown) => {
   const bytes = new TextEncoder().encode(JSON.stringify(payload))
@@ -12,6 +15,33 @@ const encodeRaw = (payload: unknown) => {
 }
 
 describe('scenario sharing', () => {
+  it.each(['generic', 'home', 'car', 'personal', 'education'] as const)(
+    'round-trips a %s scenario through v2',
+    (kind) => {
+      const scenario = defaultSuiteScenario(kind)
+      expect(decodeSharedScenario(`#${encodeSuiteScenario(scenario)}`)).toEqual(scenario)
+    },
+  )
+
+  it('wraps compatible v1 Home links in the suite contract', () => {
+    const scenario = defaultScenario()
+    expect(decodeSharedScenario(`#${encodeScenario(scenario)}`)).toEqual({ kind: 'home', value: scenario })
+  })
+
+  it('sets the calculator query while preserving the configured base', () => {
+    vi.stubGlobal('window', { location: { origin: 'https://example.github.io' } })
+    const scenario = defaultSuiteScenario('car')
+    const url = new URL(scenarioUrl(scenario))
+
+    expect(url.searchParams.get('calculator')).toBe('car')
+    expect(decodeSharedScenario(url.hash)).toEqual(scenario)
+  })
+
+  it('rejects malformed and oversized v2 fragments', () => {
+    expect(decodeSharedScenario('#v2=not-json')).toBeNull()
+    expect(decodeSharedScenario(`#v2=${'a'.repeat(8_001)}`)).toBeNull()
+  })
+
   it('round-trips a versioned scenario', () => {
     const scenario = defaultScenario()
     const fragment = encodeScenario(scenario)
