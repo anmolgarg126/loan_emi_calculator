@@ -111,6 +111,7 @@ main { width: min(1440px, 100%); margin: 0 auto; }
 .field { display: grid; align-content: start; gap: 7px; }
 .field-label { color: #29494d; font-size: 13px; font-weight: 700; }
 .field small, .mode-field small { min-height: 1.2em; color: var(--muted); font-size: 11px; line-height: 1.35; }
+.field .amount-helper { color: #456568; font-variant-numeric: tabular-nums; }
 .field-error { color: var(--danger) !important; font-weight: 700; }
 .input-shell { min-height: 48px; display: flex; align-items: stretch; border: 1px solid #9eb1b4; border-radius: var(--radius-sm); background: var(--surface); transition: border-color 160ms var(--ease-out), box-shadow 160ms var(--ease-out); overflow: hidden; }
 .input-shell:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(13,103,95,.14); }

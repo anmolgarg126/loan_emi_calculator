@@ -27,9 +27,9 @@ test('resets and restores the calculator through undo', async ({ page }) => {
   const price = page.getByLabel('Vehicle price')
   await price.fill('2000000')
   await page.getByRole('button', { name: 'Reset calculator' }).click()
-  await expect(price).toHaveValue('1000000')
+  await expect(price).toHaveValue('10,00,000')
   await page.getByRole('button', { name: 'Undo reset' }).click()
-  await expect(price).toHaveValue('2000000')
+  await expect(price).toHaveValue('20,00,000')
 })
 
 for (const tool of ['Affordability', 'Prepayment', 'Tenure', 'Interest rate'] as const) {
@@ -48,4 +48,23 @@ test('solver reports impossible combinations inline', async ({ page }) => {
   await page.getByRole('button', { name: 'Tenure' }).click()
   await page.getByLabel('Monthly EMI').fill('100')
   await expect(page.locator('.solver-answer')).toContainText('EMI must exceed first-month interest')
+})
+
+test('replaces zero amounts and formats them after editing', async ({ page }) => {
+  await page.goto('./?calculator=generic')
+  await page.getByText('Fees', { exact: true }).click()
+  const fee = page.getByLabel('Processing fee')
+  await fee.click()
+  await page.keyboard.type('343')
+  await fee.blur()
+  await expect(fee).toHaveValue('343')
+  await expect(page.locator('#generic-fee-amount')).toHaveText('₹343 · Three hundred forty-three rupees')
+
+  await page.getByRole('button', { name: 'Affordability' }).click()
+  const emi = page.getByLabel('Monthly EMI')
+  await emi.click()
+  await page.keyboard.type('100000')
+  await emi.blur()
+  await expect(emi).toHaveValue('1,00,000')
+  await expect(page.locator('#solver-emi-amount')).toHaveText('₹1,00,000 · One lakh rupees')
 })

@@ -1,5 +1,7 @@
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
+import { flushSync } from 'react-dom'
 import type { MoneyMode } from '../domain/loan'
+import { formatAmountHelper, formatIndianAmountInput, parseNumericDraft } from '../lib/indian-amount'
 
 interface CommonFieldProps {
   id: string
@@ -9,7 +11,7 @@ interface CommonFieldProps {
 }
 
 export function NumberField({
-  id, label, value, onChange, prefix, suffix, min = 0, max, step = 'any', hint, error,
+  id, label, value, onChange, prefix, suffix, min = 0, max, step = 'any', hint, error, amountValue, equivalentAmount = false,
 }: CommonFieldProps & {
   value: number
   onChange: (value: number) => void
@@ -18,8 +20,31 @@ export function NumberField({
   min?: number
   max?: number
   step?: number | 'any'
+  amountValue?: number
+  equivalentAmount?: boolean
 }) {
-  const describedBy = [hint && `${id}-hint`, error && `${id}-error`].filter(Boolean).join(' ') || undefined
+  const [draft, setDraft] = useState<string | null>(null)
+  const monetary = prefix === '₹'
+  const parsedDraft = draft === null ? value : parseNumericDraft(draft)
+  const resolvedAmount = parsedDraft === null ? undefined : amountValue ?? (monetary ? parsedDraft : undefined)
+  const amountHelper = resolvedAmount === undefined ? null : formatAmountHelper(resolvedAmount, equivalentAmount)
+  const displayValue = draft ?? (monetary ? formatIndianAmountInput(value) : Number.isFinite(value) ? String(value) : '')
+  const describedBy = [amountHelper && `${id}-amount`, hint && `${id}-hint`, error && `${id}-error`].filter(Boolean).join(' ') || undefined
+  const startEditing = (input: HTMLInputElement) => {
+    flushSync(() => setDraft(Number.isFinite(value) ? String(value) : ''))
+    input.select()
+  }
+  const edit = (next: string) => {
+    const normalized = next.replaceAll(',', '')
+    if (normalized !== '' && !/^\d+(?:\.\d*)?$/.test(normalized)) return
+    setDraft(normalized)
+    const parsed = parseNumericDraft(normalized)
+    if (parsed !== null) onChange(parsed)
+  }
+  const finishEditing = () => {
+    if (draft === '') onChange(0)
+    setDraft(null)
+  }
   return (
     <label className="field" htmlFor={id}>
       <span className="field-label">{label}</span>
@@ -28,18 +53,21 @@ export function NumberField({
         <input
           id={id}
           aria-label={label}
-          type="number"
+          type={monetary ? 'text' : 'number'}
           inputMode="decimal"
-          value={Number.isFinite(value) ? value : ''}
+          value={displayValue}
           min={min}
           max={max}
           step={step}
           aria-describedby={describedBy}
           aria-invalid={Boolean(error)}
-          onChange={(event) => onChange(event.target.value === '' ? 0 : Number(event.target.value))}
+          onFocus={(event) => startEditing(event.currentTarget)}
+          onChange={(event) => edit(event.target.value)}
+          onBlur={finishEditing}
         />
         {suffix && <span className="input-affix">{suffix}</span>}
       </span>
+      {amountHelper && <small id={`${id}-amount`} className="amount-helper">{amountHelper}</small>}
       {hint && <small id={`${id}-hint`}>{hint}</small>}
       {error && <small id={`${id}-error`} className="field-error" role="alert">{error}</small>}
     </label>
