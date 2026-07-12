@@ -51,6 +51,8 @@ const validPrincipal = (principal: number) => Number.isFinite(principal)
   && principal > 0
   && principal <= MAX_MONEY
 
+const validEmi = (emi: number) => Number.isFinite(emi) && emi > 0 && emi <= MAX_MONEY
+
 const invalidSolverInput = () => new Error('Invalid solver input.')
 
 export const solveAffordablePrincipal = ({
@@ -58,7 +60,7 @@ export const solveAffordablePrincipal = ({
   annualRate,
   tenureMonths,
 }: AffordablePrincipalInput): number => {
-  if (!Number.isFinite(emi) || emi <= 0 || !validRate(annualRate) || !validMonths(tenureMonths)) {
+  if (!validEmi(emi) || !validRate(annualRate) || !validMonths(tenureMonths)) {
     throw invalidSolverInput()
   }
   const monthlyRate = annualRate / 1200
@@ -70,7 +72,7 @@ export const solveAffordablePrincipal = ({
 }
 
 export const solveTenureMonths = ({ principal, annualRate, emi }: TenureSolverInput): number => {
-  if (!validPrincipal(principal) || !validRate(annualRate) || !Number.isFinite(emi) || emi <= 0) {
+  if (!validPrincipal(principal) || !validRate(annualRate) || !validEmi(emi)) {
     throw invalidSolverInput()
   }
   const monthlyRate = annualRate / 1200
@@ -80,25 +82,22 @@ export const solveTenureMonths = ({ principal, annualRate, emi }: TenureSolverIn
   const exactMonths = monthlyRate === 0
     ? principal / emi
     : -Math.log(1 - principal * monthlyRate / emi) / Math.log(1 + monthlyRate)
-  const nearestMonth = Math.round(exactMonths)
-  const months = Math.abs(exactMonths - nearestMonth) < 0.00005
-    ? nearestMonth
-    : Math.ceil(exactMonths)
+  const months = Math.ceil(exactMonths)
   if (!Number.isFinite(months) || months > 600) throw new Error('Supported tenure exceeded.')
   return months
 }
 
 export const solveAnnualRate = ({ principal, emi, tenureMonths }: AnnualRateSolverInput): number => {
-  if (!validPrincipal(principal) || !Number.isFinite(emi) || emi <= 0 || !validMonths(tenureMonths)) {
+  if (!validPrincipal(principal) || !validEmi(emi) || !validMonths(tenureMonths)) {
     throw invalidSolverInput()
   }
   const minimumEmi = principal / tenureMonths
   const maximumEmi = calculateEmi(principal, 50, tenureMonths)
-  if (emi < minimumEmi - 0.005 || emi > maximumEmi + 0.005) {
+  if (emi < minimumEmi || emi > maximumEmi) {
     throw new Error('EMI is outside the supported rate range.')
   }
-  if (Math.abs(emi - minimumEmi) < 0.005) return 0
-  if (Math.abs(emi - maximumEmi) < 0.005) return 50
+  if (emi === minimumEmi) return 0
+  if (emi === maximumEmi) return 50
   let low = 0
   let high = 50
   for (let iteration = 0; iteration < 80; iteration += 1) {

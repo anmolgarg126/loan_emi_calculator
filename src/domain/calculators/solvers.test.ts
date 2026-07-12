@@ -15,7 +15,8 @@ describe('loan solvers', () => {
   })
 
   it('solves tenure from principal and EMI', () => {
-    expect(solveTenureMonths({ principal: 1_000_000, annualRate: 10, emi: 21_247.04 })).toBe(60)
+    expect(solveTenureMonths({ principal: 1_000_000, annualRate: 10, emi: 21_247.04 })).toBe(61)
+    expect(solveTenureMonths({ principal: 1_000_000, annualRate: 10, emi: 21_247.033781624876 })).toBe(61)
   })
 
   it('solves annual rate from principal and EMI', () => {
@@ -32,7 +33,9 @@ describe('loan solvers', () => {
     expect(() => solveAffordablePrincipal({ emi: Number.NaN, annualRate: 10, tenureMonths: 60 })).toThrow('Invalid solver input.')
     expect(() => solveAffordablePrincipal({ emi: 1, annualRate: 51, tenureMonths: 60 })).toThrow('Invalid solver input.')
     expect(() => solveAffordablePrincipal({ emi: 1, annualRate: 10, tenureMonths: 481 })).toThrow('Invalid solver input.')
-    expect(() => solveAffordablePrincipal({ emi: 1_000_000_001, annualRate: 0, tenureMonths: 1 })).toThrow('Supported principal exceeded.')
+    expect(() => solveAffordablePrincipal({ emi: 1_000_000_001, annualRate: 0, tenureMonths: 1 })).toThrow('Invalid solver input.')
+    expect(solveAffordablePrincipal({ emi: 1_000_000_000, annualRate: 50, tenureMonths: 1 })).toBeLessThan(1_000_000_000)
+    expect(() => solveAffordablePrincipal({ emi: 1_000_000_000.01, annualRate: 50, tenureMonths: 1 })).toThrow('Invalid solver input.')
   })
 
   it('rejects invalid tenure inputs, non-amortizing EMI, and unsupported output tenure', () => {
@@ -41,6 +44,8 @@ describe('loan solvers', () => {
     expect(() => solveTenureMonths({ principal: 1_000_000, annualRate: 12, emi: 10_000 })).toThrow('EMI must exceed first-month interest.')
     expect(() => solveTenureMonths({ principal: 1_000_000, annualRate: 12, emi: 9_999.99 })).toThrow('EMI must exceed first-month interest.')
     expect(() => solveTenureMonths({ principal: 1_000_000, annualRate: 0, emi: 1_000 })).toThrow('Supported tenure exceeded.')
+    expect(solveTenureMonths({ principal: 1_000_000_000, annualRate: 0, emi: 1_000_000_000 })).toBe(1)
+    expect(() => solveTenureMonths({ principal: 1_000_000_000, annualRate: 0, emi: 1_000_000_000.01 })).toThrow('Invalid solver input.')
   })
 
   it('solves the supported annual-rate bounds', () => {
@@ -53,6 +58,11 @@ describe('loan solvers', () => {
     expect(() => solveAnnualRate({ principal: 0, emi: 1, tenureMonths: 12 })).toThrow('Invalid solver input.')
     expect(() => solveAnnualRate({ principal: 120_000, emi: 9_999, tenureMonths: 12 })).toThrow('EMI is outside the supported rate range.')
     expect(() => solveAnnualRate({ principal: 120_000, emi: 100_000, tenureMonths: 12 })).toThrow('EMI is outside the supported rate range.')
+    expect(() => solveAnnualRate({ principal: 120_000, emi: 9_999.999, tenureMonths: 12 })).toThrow('EMI is outside the supported rate range.')
+    const maximumEmi = calculateEmi(120_000, 50, 12)
+    expect(() => solveAnnualRate({ principal: 120_000, emi: maximumEmi + 0.001, tenureMonths: 12 })).toThrow('EMI is outside the supported rate range.')
+    expect(solveAnnualRate({ principal: 1_000_000_000, emi: 1_000_000_000, tenureMonths: 1 })).toBe(0)
+    expect(() => solveAnnualRate({ principal: 1_000_000_000, emi: 1_000_000_000.01, tenureMonths: 1 })).toThrow('Invalid solver input.')
   })
 
   it('supports the largest bounded solver inputs', () => {
@@ -60,7 +70,7 @@ describe('loan solvers', () => {
     const factor = (1 + monthlyRate) ** 480
     const emi = 1_000_000_000 * monthlyRate * factor / (factor - 1)
     expect(solveAffordablePrincipal({ emi, annualRate: 50, tenureMonths: 480 })).toBe(1_000_000_000)
-    expect(solveTenureMonths({ principal: 1_000_000_000, annualRate: 50, emi })).toBe(480)
+    expect(solveTenureMonths({ principal: 1_000_000_000, annualRate: 50, emi: emi + 0.0001 })).toBe(480)
   })
 })
 
