@@ -39,7 +39,7 @@ export const defaultGraphState = (): GraphState => ({
   granularity: 'yearly',
   hiddenSeries: [],
   rangeStart: 0,
-  rangeEnd: 1,
+  rangeEnd: Number.MAX_SAFE_INTEGER,
   compareOd: false,
   selectedPeriod: null,
 })

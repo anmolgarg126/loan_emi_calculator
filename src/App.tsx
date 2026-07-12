@@ -1,13 +1,14 @@
 import { lazy, Suspense, useEffect, useReducer, useState } from 'react'
 import { CalculatorShell } from './components/CalculatorShell'
 import { ResultSummary } from './components/ResultSummary'
+import { PaymentGraph } from './components/PaymentGraph'
+import { Schedule } from './components/Schedule'
 import { CarForm } from './components/calculators/CarForm'
 import { EducationForm } from './components/calculators/EducationForm'
 import { GenericForm } from './components/calculators/GenericForm'
 import { HomeForm } from './components/calculators/HomeForm'
 import { PersonalForm } from './components/calculators/PersonalForm'
 import type { CalculatorKind, SolverKind, SuiteScenario } from './domain/calculators'
-import { formatCurrency } from './domain/loan'
 import { copyScenarioUrl } from './lib/share'
 import { createInitialSuiteModel, reduceSuiteModel } from './lib/suite-state'
 import { deleteRememberedScenario, readRememberedScenario, saveRememberedScenario } from './lib/remembered-scenario'
@@ -111,15 +112,12 @@ function App() {
 
   const resultPanel = <ResultSummary current={current} displayed={displayed} shared={model.shared} hasUndo={Boolean(model.undo)} hasRemembered={hasRemembered} exporting={exporting} status={status} onReset={() => dispatch({ type: 'reset', now: Date.now() })} onUndo={() => dispatch({ type: 'undo-reset', now: Date.now() })} onRemember={remember} onRestore={restore} onDeleteRemembered={removeRemembered} onShare={share} onPrint={() => window.print()} onCsv={exportCsv} onXlsx={exportXlsx} />
 
-  const schedule = <section className="suite-schedule" aria-labelledby="schedule-title">
-    <div className="section-heading"><div><h2 id="schedule-title">Payment schedule</h2><p>Accessible monthly detail behind every summary figure.</p></div><span>{displayed.view.schedule.length} payments</span></div>
-    <div className="table-scroll"><table><thead><tr><th>Payment date</th><th>Payment</th><th>Principal</th><th>Interest</th><th>Prepayment</th><th>Costs</th><th>Balance</th></tr></thead><tbody>{displayed.view.schedule.slice(0, 24).map((row) => <tr key={`${row.date}-${row.period}`}><td>{row.date}</td><td>{formatCurrency(row.payment)}</td><td>{formatCurrency(row.principal)}</td><td>{formatCurrency(row.interest)}</td><td>{formatCurrency(row.prepayment)}</td><td>{formatCurrency(row.costs)}</td><td>{formatCurrency(row.balance)}</td></tr>)}</tbody></table></div>
-    {displayed.view.schedule.length > 24 && <p className="table-note">Showing the first 24 payments. Year-by-year expansion and exports appear with the interactive graph.</p>}
-  </section>
+  const selectPeriod = (period: string | null) => dispatch({ type: 'set-graph', graph: { selectedPeriod: period } })
+  const schedule = <Schedule schedule={displayed.view.schedule} selectedPeriod={model.graph.selectedPeriod} granularity={model.graph.granularity} onSelectPeriod={(period) => selectPeriod(period)} />
 
   return <>
     {solver && <Suspense fallback={<div className="solver-loading" role="status">Opening solver…</div>}><SolverForm kind={solver} onClose={() => setSolver(null)} /></Suspense>}
-    <CalculatorShell activeKind={model.scenario.kind} onSelectKind={selectKind} onSelectSolver={setSolver} form={form} results={resultPanel} graph={<section className="graph-stage" aria-labelledby="graph-title"><div><h2 id="graph-title">Payment trajectory</h2><p>The interactive principal, interest, costs, prepayment, balance, and OD comparison graph is the next layer of this view.</p></div></section>} schedule={schedule} />
+    <CalculatorShell activeKind={model.scenario.kind} onSelectKind={selectKind} onSelectSolver={setSolver} form={form} results={resultPanel} graph={<PaymentGraph result={displayed} graphState={model.graph} onGraphStateChange={(graph) => dispatch({ type: 'set-graph', graph })} onSelectPeriod={selectPeriod} />} schedule={schedule} />
   </>
 }
 

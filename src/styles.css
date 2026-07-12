@@ -143,8 +143,8 @@ main { width: min(1440px, 100%); margin: 0 auto; }
 .entry-row:has(> :nth-child(3):last-child) { grid-template-columns: repeat(2, minmax(160px, 1fr)) auto; }
 .remove-button { min-height: 44px; align-self: end; padding: 0 10px; border: 0; background: transparent; color: var(--danger); font-weight: 700; }
 
-.graph-stage, .suite-schedule { padding: 40px clamp(20px, 4vw, 64px); background: var(--surface); border-bottom: 1px solid var(--line); }
-.graph-stage { min-height: 180px; display: grid; place-items: center; text-align: center; background: var(--accent-soft); }
+.payment-graph, .suite-schedule { padding: 40px clamp(20px, 4vw, 64px); background: var(--surface); border-bottom: 1px solid var(--line); }
+.payment-graph { background: #f8fbfb; }
 .section-heading { display: flex; align-items: start; justify-content: space-between; gap: 24px; margin-bottom: 20px; }
 .section-heading > span { padding: 7px 10px; border-radius: 999px; background: var(--surface-muted); color: var(--muted); font-size: 12px; font-weight: 700; }
 .table-scroll { max-width: 100%; overflow-x: auto; }
@@ -153,6 +153,45 @@ th, td { padding: 11px 12px; border-bottom: 1px solid var(--line); text-align: r
 th { color: var(--muted); background: var(--surface-muted); font-size: 11px; }
 th:first-child, td:first-child { text-align: left; }
 .table-note { color: var(--muted); font-size: 12px; }
+.sr-summary { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); }
+.graph-heading { margin-bottom: 12px; }
+.graph-granularity { display: inline-flex; padding: 3px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); }
+.graph-granularity button { min-height: 40px; padding: 0 14px; border: 0; border-radius: 4px; background: transparent; color: var(--muted); font-weight: 700; }
+.graph-granularity button[aria-pressed="true"] { background: var(--accent); color: white; }
+.graph-controls { display: flex; align-items: end; justify-content: space-between; gap: 24px; margin-bottom: 12px; }
+.graph-legend { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.graph-legend button, .line-legend-item { min-height: 44px; display: inline-flex; align-items: center; gap: 7px; padding: 0 9px; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--muted); font-size: 12px; font-weight: 650; }
+.graph-legend button:hover { background: var(--surface-muted); }
+.graph-legend button > span, .line-legend-item i { width: 11px; height: 11px; border-radius: 2px; flex: 0 0 auto; }
+.balance-key { border-radius: 50% !important; background: #9a4813; }
+.od-key { border: 2px dashed #087e82; background: transparent !important; }
+.range-controls { display: flex; gap: 12px; }
+.range-controls label { min-width: 150px; display: grid; gap: 4px; color: var(--muted); font-size: 11px; font-weight: 650; }
+.range-controls input { min-height: 28px; width: 100%; accent-color: var(--accent); }
+.graph-scroll { width: 100%; overflow-x: auto; }
+.graph-scroll svg { display: block; width: 100%; min-width: 720px; height: auto; }
+.graph-gridline { stroke: #dce5e6; stroke-width: 1; }
+.graph-axis { fill: #577075; font-size: 11px; }
+.graph-x-label { font-size: 10px; }
+.balance-line, .od-balance-line { fill: none; stroke: #9a4813; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
+.od-balance-line { stroke: #087e82; stroke-width: 2.5; stroke-dasharray: 7 5; }
+.payment-graph [data-period]:focus { outline: none; }
+.payment-graph [data-period]:focus rect[fill="transparent"] { stroke: var(--focus); stroke-width: 2; }
+.graph-tooltip { display: flex; flex-wrap: wrap; gap: 6px 14px; padding: 12px 14px; border-radius: var(--radius-md); background: var(--ink); color: white; font-size: 12px; }
+.graph-tooltip strong { width: 100%; font-size: 14px; }
+.graph-tooltip span { color: #d9e6e7; }
+.graph-note { margin: 10px 0 0; color: var(--muted); font-size: 12px; }
+.year-list { border-top: 1px solid var(--line); }
+.year-list details { border-bottom: 1px solid var(--line); }
+.year-list summary { min-height: 70px; display: grid; grid-template-columns: .7fr repeat(3, 1fr); align-items: center; gap: 16px; list-style: none; }
+.year-list summary::-webkit-details-marker { display: none; }
+.year-list summary > span { display: grid; gap: 3px; }
+.year-list summary small { color: var(--muted); font-size: 10px; }
+.year-list summary strong { font-size: 13px; font-variant-numeric: tabular-nums; }
+.year-label { color: var(--accent); font-size: 18px; font-weight: 800; }
+.year-list tr[tabindex] { cursor: pointer; }
+.year-list tr.selected-row { background: var(--accent-soft); }
+.year-list tr:focus-visible { outline: 3px solid var(--focus); outline-offset: -3px; }
 
 .solver-panel { position: fixed; z-index: 60; inset: 50% auto auto 50%; transform: translate(-50%, -50%); width: min(720px, calc(100% - 32px)); max-height: calc(100dvh - 32px); overflow: auto; padding: 28px; border-radius: var(--radius-lg); background: var(--surface); box-shadow: 0 8px 40px rgba(5,42,43,.25); }
 .solver-loading { position: fixed; z-index: 60; inset: 50% auto auto 50%; transform: translate(-50%, -50%); padding: 16px 20px; border-radius: var(--radius-md); background: var(--surface); box-shadow: var(--shadow-sm); }
@@ -190,13 +229,17 @@ th:first-child, td:first-child { text-align: left; }
   .tabs button { padding-inline: 10px; }
   .solver-tools { flex-wrap: nowrap; overflow-x: auto; }
   .workspace { margin-top: 16px; }
-  .form-panel, .results-sticky, .graph-stage, .suite-schedule { padding: 28px 16px; }
+  .form-panel, .results-sticky, .payment-graph, .suite-schedule { padding: 28px 16px; }
   .field-grid, .entry-row, .entry-row:has(> :nth-child(3):last-child) { grid-template-columns: 1fr; }
   .guided-section > summary { grid-template-columns: 30px minmax(0,1fr) 22px; min-height: 88px; }
   .section-state { grid-column: 2; justify-self: start; }
   .summary-mark { grid-column: 3; grid-row: 1 / span 2; }
   .guided-body { padding-left: 0; }
   .result-heading, .section-heading { align-items: stretch; flex-direction: column; }
+  .graph-controls, .range-controls { align-items: stretch; flex-direction: column; }
+  .range-controls label { min-width: 0; }
+  .year-list summary { grid-template-columns: .6fr 1fr 1fr; }
+  .year-list summary > span:last-child { display: none; }
   .primary-result strong { font-size: 34px; }
   .solver-panel { padding: 20px 16px; }
 }

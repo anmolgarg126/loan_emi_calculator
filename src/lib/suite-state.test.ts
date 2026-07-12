@@ -4,6 +4,10 @@ import { encodeSuiteScenario } from './share'
 import { createInitialSuiteModel, createSuiteModel, reduceSuiteModel } from './suite-state'
 
 describe('suite state', () => {
+  it('starts with the complete graph range visible', () => {
+    expect(createSuiteModel(defaultSuiteScenario('generic')).graph.rangeEnd).toBe(Number.MAX_SAFE_INTEGER)
+  })
+
   it('resets the active calculator and keeps an undo snapshot for ten seconds', () => {
     const current = createSuiteModel({
       kind: 'car',
