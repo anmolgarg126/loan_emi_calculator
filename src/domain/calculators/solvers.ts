@@ -66,7 +66,7 @@ export const solveAffordablePrincipal = ({
   const monthlyRate = annualRate / 1200
   const principal = roundMoney(monthlyRate === 0
     ? emi * tenureMonths
-    : emi * (1 - (1 + monthlyRate) ** -tenureMonths) / monthlyRate)
+    : emi * (-Math.expm1(-tenureMonths * Math.log1p(monthlyRate))) / monthlyRate)
   if (!Number.isFinite(principal) || principal > MAX_MONEY) throw new Error('Supported principal exceeded.')
   return principal
 }
@@ -81,7 +81,7 @@ export const solveTenureMonths = ({ principal, annualRate, emi }: TenureSolverIn
   }
   const exactMonths = monthlyRate === 0
     ? principal / emi
-    : -Math.log(1 - principal * monthlyRate / emi) / Math.log(1 + monthlyRate)
+    : -Math.log1p(-principal * monthlyRate / emi) / Math.log1p(monthlyRate)
   const months = Math.ceil(exactMonths)
   if (!Number.isFinite(months) || months > 600) throw new Error('Supported tenure exceeded.')
   return months
@@ -91,7 +91,7 @@ export const solveAnnualRate = ({ principal, emi, tenureMonths }: AnnualRateSolv
   if (!validPrincipal(principal) || !validEmi(emi) || !validMonths(tenureMonths)) {
     throw invalidSolverInput()
   }
-  const minimumEmi = principal / tenureMonths
+  const minimumEmi = calculateEmi(principal, 0, tenureMonths)
   const maximumEmi = calculateEmi(principal, 50, tenureMonths)
   if (emi < minimumEmi || emi > maximumEmi) {
     throw new Error('EMI is outside the supported rate range.')
@@ -100,11 +100,12 @@ export const solveAnnualRate = ({ principal, emi, tenureMonths }: AnnualRateSolv
   if (emi === maximumEmi) return 50
   let low = 0
   let high = 50
-  for (let iteration = 0; iteration < 80; iteration += 1) {
+  for (let iteration = 0; iteration < 100 && high - low > 1e-10; iteration += 1) {
     const rate = (low + high) / 2
-    const difference = calculateEmi(principal, rate, tenureMonths) - emi
-    if (Math.abs(difference) < 0.005) return rate
-    if (difference < 0) low = rate
+    const monthlyRate = rate / 1200
+    const rawEmi = principal * monthlyRate
+      / (-Math.expm1(-tenureMonths * Math.log1p(monthlyRate)))
+    if (rawEmi < emi) low = rate
     else high = rate
   }
   return (low + high) / 2
@@ -151,7 +152,10 @@ const keepTenureChanges = (
   prepayments: Prepayment[],
   payoffCycles: number,
 ): RateChange[] => {
-  const byDate = new Map(scenario.rateChanges.map((change) => [change.date, change]))
+  const byDate = new Map(scenario.rateChanges.map((change) => [change.date, {
+    ...change,
+    mode: 'keep-tenure' as const,
+  }]))
   prepayments.forEach((item) => {
     const start = cycleIndex(scenario.startDate, item.date)!
     const interval = frequencyInterval(item.frequency)!
@@ -173,6 +177,10 @@ const runModified = (
   scenario: GenericScenario,
   prepayments: Prepayment[],
   rateChanges: RateChange[],
+  comparisonControls: Pick<
+    Parameters<typeof buildAmortizationSchedule>[0],
+    'initialEmiOverride' | 'keepTenureTargetMonths'
+  > = {},
 ): GenericResult => {
   const engineStartDate = addMonths(scenario.startDate, -1)
   const amortization = buildAmortizationSchedule({
@@ -187,6 +195,7 @@ const runModified = (
       date: addMonths(engineStartDate, cycleIndex(scenario.startDate, change.date)!),
     })),
     balloonAmount: 0,
+    ...comparisonControls,
   })
   if (amortization.errors.length > 0) {
     throw new Error(`Invalid prepayment comparison. ${amortization.errors[0]}`)
@@ -227,8 +236,22 @@ export const comparePrepayment = ({
   const rateChanges = mode === 'keep-tenure'
     ? keepTenureChanges(scenario, prepayments, baselineResult.native.schedule.length)
     : scenario.rateChanges
-  const modified = runModified(scenario, prepayments, rateChanges)
   const baseline = baselineResult.native
+  const modified = runModified(
+    scenario,
+    prepayments,
+    rateChanges,
+    mode === 'keep-tenure' ? {
+      initialEmiOverride: baseline.initialEmi,
+      keepTenureTargetMonths: baseline.schedule.length,
+    } : {},
+  )
+  if (mode === 'keep-tenure'
+    && (modified.schedule.length !== baseline.schedule.length
+      || modified.payoffDate !== baseline.payoffDate
+      || modified.schedule.some(({ payment }) => payment <= 0))) {
+    throw new Error('Cannot preserve baseline payoff.')
+  }
   return {
     baseline,
     modified,

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { addMonths, calculateEmi, roundMoney, type Prepayment } from '../loan'
 import { defaultGenericScenario } from './generic'
+import type { GenericScenario } from './types'
 import {
   comparePrepayment,
   solveAffordablePrincipal,
@@ -29,6 +30,13 @@ describe('loan solvers', () => {
     expect(solveTenureMonths({ principal: 120_001, annualRate: 0, emi: 10_000 })).toBe(13)
   })
 
+  it.each([1e-12, 1e-13])('stays finite and accurate at a near-zero annual rate of %s', (annualRate) => {
+    expect(solveAffordablePrincipal({ emi: 1_000, annualRate, tenureMonths: 480 })).toBe(480_000)
+    const tenure = solveTenureMonths({ principal: 479_999, annualRate, emi: 1_000 })
+    expect(tenure).toBe(480)
+    expect(Number.isFinite(tenure)).toBe(true)
+  })
+
   it('rejects invalid affordability inputs and results above the supported principal', () => {
     expect(() => solveAffordablePrincipal({ emi: Number.NaN, annualRate: 10, tenureMonths: 60 })).toThrow('Invalid solver input.')
     expect(() => solveAffordablePrincipal({ emi: 1, annualRate: 51, tenureMonths: 60 })).toThrow('Invalid solver input.')
@@ -50,8 +58,17 @@ describe('loan solvers', () => {
 
   it('solves the supported annual-rate bounds', () => {
     expect(solveAnnualRate({ principal: 120_000, emi: 10_000, tenureMonths: 12 })).toBe(0)
-    const emiAtFifty = calculateEmi(1_000_000, 50, 60)
-    expect(solveAnnualRate({ principal: 1_000_000, emi: emiAtFifty, tenureMonths: 60 })).toBeCloseTo(50, 4)
+    expect(solveAnnualRate({ principal: 100, emi: 33.33, tenureMonths: 3 })).toBe(0)
+    expect(solveAnnualRate({ principal: 1_000_000, emi: 21_247.044711268278, tenureMonths: 60 })).toBeCloseTo(10, 8)
+    expect(solveAnnualRate({ principal: 1_000_000, emi: 45_604.74, tenureMonths: 60 })).toBe(50)
+  })
+
+  it('finds a deterministic unique raw-rate solution when cent rounding is ambiguous', () => {
+    const input = { principal: 1, emi: 0.01, tenureMonths: 480 }
+    const first = solveAnnualRate(input)
+
+    expect(first).toBeCloseTo(11.894546653942378, 8)
+    expect(solveAnnualRate(input)).toBe(first)
   })
 
   it('rejects invalid or unsolvable annual-rate inputs', () => {
@@ -74,7 +91,7 @@ describe('loan solvers', () => {
   })
 })
 
-const scenario = () => ({
+const scenario = (): GenericScenario => ({
   ...defaultGenericScenario(),
   principal: 1_000_000,
   annualRate: 10,
@@ -114,6 +131,18 @@ describe('prepayment comparison', () => {
     })
 
     expect(dueIndexes.map((index) => result.modified.schedule[index]?.prepayment)).toEqual(dueIndexes.map(() => 1_000))
+    if (frequency === 'quarterly') {
+      expect([1, 2, 4, 5].map((index) => result.modified.schedule[index]?.prepayment)).toEqual([0, 0, 0, 0])
+    }
+    expect(result.modified.schedule).toHaveLength(result.baseline.schedule.length)
+    expect(result.modified.schedule.at(-1)?.balance).toBe(0)
+    expect(result.modifiedPayoff).toBe(result.originalPayoff)
+    expect(roundMoney(result.modified.schedule.reduce((sum, row) => sum + row.interest, 0)))
+      .toBe(result.modified.totalInterest)
+    expect(roundMoney(result.modified.schedule.reduce(
+      (sum, row) => sum + row.principal + row.prepayment,
+      0,
+    ))).toBe(scenario().principal)
   })
 
   it('recasts later EMI while preserving the contractual payoff', () => {
@@ -123,6 +152,37 @@ describe('prepayment comparison', () => {
     expect(result.modifiedPayoff).toBe(result.originalPayoff)
     expect(result.monthsSaved).toBe(0)
     expect(result.modified.schedule[1]!.payment).toBeLessThan(result.baseline.schedule[1]!.payment)
+  })
+
+  it.each([
+    [12, 64],
+    [8, 58],
+  ])('keeps a %s%% reset baseline at its actual %s-cycle payoff', (annualRate, payoffCycles) => {
+    const base = scenario()
+    base.rateChanges = [{
+      id: 'baseline-reset',
+      date: addMonths(base.startDate, 6),
+      annualRate,
+      mode: 'keep-emi',
+    }]
+    const result = comparePrepayment({
+      scenario: base,
+      prepayments: [prepayment({ date: addMonths(base.startDate, 24), amount: 50_000 })],
+      mode: 'keep-tenure',
+    })
+
+    expect(result.baseline.schedule).toHaveLength(payoffCycles)
+    expect(result.modified.schedule).toHaveLength(payoffCycles)
+    expect(result.modifiedPayoff).toBe(result.originalPayoff)
+    expect(result.modified.schedule.at(-1)?.balance).toBe(0)
+  })
+
+  it('rejects a keep-tenure prepayment that necessarily pays off early', () => {
+    expect(() => comparePrepayment({
+      scenario: scenario(),
+      prepayments: [prepayment({ amount: 999_999 })],
+      mode: 'keep-tenure',
+    })).toThrow('Cannot preserve baseline payoff.')
   })
 
   it('rejects invalid, duplicate, excessive, and post-payoff events without partial results', () => {

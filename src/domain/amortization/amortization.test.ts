@@ -19,6 +19,35 @@ const balloonComponent = (result: ReturnType<typeof buildAmortizationSchedule>) 
 }
 
 describe('amortization engine', () => {
+  it('preserves legacy output when optional comparison controls are absent', () => {
+    const input = balloonInput({ balloonAmount: 0 })
+
+    expect(buildAmortizationSchedule(input)).toEqual(buildAmortizationSchedule({
+      ...input,
+      initialEmiOverride: undefined,
+      keepTenureTargetMonths: undefined,
+    }))
+  })
+
+  it('uses opt-in initial EMI and keep-tenure target without changing the contractual input tenure', () => {
+    const result = buildAmortizationSchedule({
+      ...balloonInput({ principal: 1_000_000, annualRate: 10, tenureMonths: 60, balloonAmount: 0 }),
+      initialEmiOverride: 21_247.04,
+      keepTenureTargetMonths: 64,
+      rateChanges: [{
+        id: 'comparison-reset',
+        date: '2027-01-01',
+        annualRate: 12,
+        mode: 'keep-tenure',
+      }],
+    })
+
+    expect(result.errors).toEqual([])
+    expect(result.initialEmi).toBe(21_247.04)
+    expect(result.rows).toHaveLength(64)
+    expect(result.rows.at(-1)?.balance).toBe(0)
+  })
+
   it('builds the standard EMI golden schedule', () => {
     const result = buildAmortizationSchedule({
       principal: 4_000_000,

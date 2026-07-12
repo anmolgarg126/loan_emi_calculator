@@ -8,6 +8,8 @@ export interface AmortizationInput {
   prepayments: Prepayment[]
   rateChanges: RateChange[]
   balloonAmount: number
+  initialEmiOverride?: number
+  keepTenureTargetMonths?: number
 }
 
 export interface AmortizationRow {
@@ -148,14 +150,32 @@ export const buildAmortizationSchedule = (input: AmortizationInput): Amortizatio
       warnings: [],
     }
   }
+  if ((input.initialEmiOverride !== undefined
+      && (!Number.isFinite(input.initialEmiOverride) || input.initialEmiOverride <= 0))
+    || (input.keepTenureTargetMonths !== undefined
+      && (!Number.isInteger(input.keepTenureTargetMonths)
+        || input.keepTenureTargetMonths < 1
+        || input.keepTenureTargetMonths > MAX_MONTHS))) {
+    return {
+      initialEmi: 0,
+      totalInterest: 0,
+      totalPrepayments: 0,
+      payoffDate: input.startDate,
+      rows,
+      errors: ['Amortization comparison controls are invalid.'],
+      warnings: [],
+    }
+  }
   const changes = new Map(input.rateChanges.map((change) => [change.date, change]))
   const prepayments = input.prepayments
     .map((item) => ({ item, startCycle: cycleIndex(input.startDate, item.date) }))
     .filter((entry): entry is { item: Prepayment, startCycle: number } => entry.startCycle !== null)
   let annualRate = input.annualRate
   let balance = input.principal
-  let emi = calculateBalloonEmi(balance, annualRate, input.tenureMonths, input.balloonAmount)
+  let emi = input.initialEmiOverride
+    ?? calculateBalloonEmi(balance, annualRate, input.tenureMonths, input.balloonAmount)
   const initialEmi = emi
+  const keepTenureTargetMonths = input.keepTenureTargetMonths ?? input.tenureMonths
   let extensionAllowed = false
   let finalPaymentMonth = input.tenureMonths - 1
 
@@ -167,7 +187,7 @@ export const buildAmortizationSchedule = (input: AmortizationInput): Amortizatio
       annualRate = change.annualRate
       extensionAllowed = change.mode === 'keep-emi'
       if (change.mode === 'keep-tenure') {
-        finalPaymentMonth = Math.max(month, input.tenureMonths - 1)
+        finalPaymentMonth = Math.max(month, keepTenureTargetMonths - 1)
         const remaining = finalPaymentMonth - month + 1
         emi = calculateBalloonEmi(balance, annualRate, remaining, input.balloonAmount)
       } else if (input.balloonAmount > 0) {
@@ -191,7 +211,7 @@ export const buildAmortizationSchedule = (input: AmortizationInput): Amortizatio
     const isBalloonPayoff = input.balloonAmount > 0
       && (month === finalPaymentMonth || amortizingBalance <= 0.005)
     const isFinalFixedTenurePayment = isBalloonPayoff
-      || (input.balloonAmount === 0 && !extensionAllowed && month === input.tenureMonths - 1)
+      || (input.balloonAmount === 0 && !extensionAllowed && month === finalPaymentMonth)
     const principal = roundMoney(
       isFinalFixedTenurePayment
         ? balance
