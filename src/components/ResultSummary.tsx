@@ -35,9 +35,9 @@ export function ResultSummary({ current, displayed, shared, hasUndo, hasRemember
     <dl className="metric-list">{displayed.view.metrics.map((metric) => <div key={metric.id}><dt>{metric.label}</dt><dd>{formatMetric(metric)}</dd></div>)}</dl>
     <div className="result-actions">
       <button type="button" className="primary-button" onClick={onShare} disabled={invalid}>Copy share link</button>
-      <button type="button" className="secondary-button" onClick={onRemember} disabled={invalid}>Remember</button>
-      <button type="button" className="secondary-button" onClick={onRestore} disabled={!hasRemembered}>Restore saved</button>
-      <button type="button" className="secondary-button danger-button" onClick={onDeleteRemembered} disabled={!hasRemembered}>Delete saved</button>
+      <button type="button" className="secondary-button" onClick={onRemember} disabled={invalid}>Remember this scenario</button>
+      <button type="button" className="secondary-button" onClick={onRestore} disabled={!hasRemembered}>Restore saved scenario</button>
+      <button type="button" className="secondary-button danger-button" onClick={onDeleteRemembered} disabled={!hasRemembered}>Delete saved scenario</button>
       <button type="button" className="secondary-button" onClick={onPrint} disabled={invalid}>Print / Save PDF</button>
       <button type="button" className="secondary-button" onClick={onCsv} disabled={invalid || exporting}>Download CSV</button>
       <button type="button" className="secondary-button" onClick={onXlsx} disabled={invalid || exporting}>{exporting ? 'Preparing Excel…' : 'Download Excel'}</button>

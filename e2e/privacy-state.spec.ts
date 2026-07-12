@@ -1,0 +1,42 @@
+import { expect, test } from '@playwright/test'
+
+test('keeps open tabs independent and restores only on request', async ({ browser, baseURL }) => {
+  const context = await browser.newContext()
+  const first = await context.newPage()
+  const second = await context.newPage()
+  await first.goto(`${baseURL}?calculator=car`)
+  await second.goto(`${baseURL}?calculator=car`)
+  await first.getByLabel('Vehicle price').fill('2000000')
+  await expect(second.getByLabel('Vehicle price')).toHaveValue('1000000')
+  await first.getByRole('button', { name: 'Remember this scenario' }).click()
+  await expect(second.getByLabel('Vehicle price')).toHaveValue('1000000')
+  await second.reload()
+  await expect(second.getByLabel('Vehicle price')).toHaveValue('1000000')
+  await expect(second.getByRole('button', { name: 'Restore saved scenario' })).toBeEnabled()
+  await second.getByRole('button', { name: 'Restore saved scenario' }).click()
+  await expect(second.getByLabel('Vehicle price')).toHaveValue('2000000')
+  expect(await context.cookies()).toEqual([])
+  await context.close()
+})
+
+test('confirms saved deletion without changing the current calculator', async ({ page }) => {
+  await page.goto('./?calculator=car')
+  await page.getByLabel('Vehicle price').fill('1500000')
+  await page.getByRole('button', { name: 'Remember this scenario' }).click()
+  page.once('dialog', async (dialog) => dialog.dismiss())
+  await page.getByRole('button', { name: 'Delete saved scenario' }).click()
+  await expect(page.getByRole('button', { name: 'Restore saved scenario' })).toBeEnabled()
+  page.once('dialog', async (dialog) => dialog.accept())
+  await page.getByRole('button', { name: 'Delete saved scenario' }).click()
+  await expect(page.getByRole('button', { name: 'Restore saved scenario' })).toBeDisabled()
+  await expect(page.getByLabel('Vehicle price')).toHaveValue('1500000')
+})
+
+test('announces reset and offers undo for ten seconds', async ({ page }) => {
+  await page.goto('./?calculator=personal')
+  await page.getByLabel('Requested loan amount').fill('900000')
+  await page.getByRole('button', { name: 'Reset calculator' }).click()
+  await expect(page.getByText('Calculator reset. Undo available for 10 seconds.')).toBeVisible()
+  await page.getByRole('button', { name: 'Undo reset' }).click()
+  await expect(page.getByLabel('Requested loan amount')).toHaveValue('900000')
+})

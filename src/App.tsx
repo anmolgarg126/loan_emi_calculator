@@ -77,6 +77,7 @@ function App() {
     setStatus('Saved scenario restored into this tab.')
   }
   const removeRemembered = () => {
+    if (!window.confirm('Delete the saved scenario from this device?')) return
     const deleted = deleteRememberedScenario()
     if (deleted) setHasRemembered(false)
     setStatus(deleted ? 'Saved scenario deleted. Your current calculator is unchanged.' : 'This browser could not delete the saved scenario.')
@@ -99,6 +100,14 @@ function App() {
       setExporting(false)
     }
   }
+  const reset = () => {
+    dispatch({ type: 'reset', now: Date.now() })
+    setStatus('Calculator reset. Undo available for 10 seconds.')
+  }
+  const undoReset = () => {
+    dispatch({ type: 'undo-reset', now: Date.now() })
+    setStatus('Reset undone.')
+  }
 
   const form = (() => {
     switch (model.scenario.kind) {
@@ -110,7 +119,7 @@ function App() {
     }
   })()
 
-  const resultPanel = <ResultSummary current={current} displayed={displayed} shared={model.shared} hasUndo={Boolean(model.undo)} hasRemembered={hasRemembered} exporting={exporting} status={status} onReset={() => dispatch({ type: 'reset', now: Date.now() })} onUndo={() => dispatch({ type: 'undo-reset', now: Date.now() })} onRemember={remember} onRestore={restore} onDeleteRemembered={removeRemembered} onShare={share} onPrint={() => window.print()} onCsv={exportCsv} onXlsx={exportXlsx} />
+  const resultPanel = <ResultSummary current={current} displayed={displayed} shared={model.shared} hasUndo={Boolean(model.undo)} hasRemembered={hasRemembered} exporting={exporting} status={status} onReset={reset} onUndo={undoReset} onRemember={remember} onRestore={restore} onDeleteRemembered={removeRemembered} onShare={share} onPrint={() => window.print()} onCsv={exportCsv} onXlsx={exportXlsx} />
 
   const selectPeriod = (period: string | null) => dispatch({ type: 'set-graph', graph: { selectedPeriod: period } })
   const schedule = <Schedule schedule={displayed.view.schedule} selectedPeriod={model.graph.selectedPeriod} granularity={model.graph.granularity} onSelectPeriod={(period) => selectPeriod(period)} />
