@@ -173,8 +173,14 @@ describe('prepayment comparison', () => {
 
     expect(result.baseline.schedule).toHaveLength(payoffCycles)
     expect(result.modified.schedule).toHaveLength(payoffCycles)
+    expect(result.modified.schedule.slice(0, 24)).toEqual(result.baseline.schedule.slice(0, 24))
+    expect(result.baseline.schedule[24]?.prepayment).toBe(0)
+    expect(result.modified.schedule[24]?.prepayment).toBe(50_000)
     expect(result.modifiedPayoff).toBe(result.originalPayoff)
     expect(result.modified.schedule.at(-1)?.balance).toBe(0)
+    expect(result.interestSaved).toBe(roundMoney(
+      result.baseline.totalInterest - result.modified.totalInterest,
+    ))
   })
 
   it('rejects a keep-tenure prepayment that necessarily pays off early', () => {

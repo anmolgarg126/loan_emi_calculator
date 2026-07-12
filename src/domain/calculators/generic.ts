@@ -164,7 +164,9 @@ export const calculateGeneric = (scenario: GenericScenario): Extract<SuiteResult
   const engineStartDate = addMonths(scenario.startDate, -1)
   const engineRateDates = new Map<string, string>()
   const amortization = buildAmortizationSchedule({
-    ...scenario,
+    principal: scenario.principal,
+    annualRate: scenario.annualRate,
+    tenureMonths: scenario.tenureMonths,
     startDate: engineStartDate,
     prepayments: scenario.prepayments.map((prepayment) => ({
       ...prepayment,

@@ -152,10 +152,16 @@ const keepTenureChanges = (
   prepayments: Prepayment[],
   payoffCycles: number,
 ): RateChange[] => {
-  const byDate = new Map(scenario.rateChanges.map((change) => [change.date, {
-    ...change,
-    mode: 'keep-tenure' as const,
-  }]))
+  const firstPrepaymentCycle = Math.min(
+    ...prepayments.map((item) => cycleIndex(scenario.startDate, item.date)!),
+  )
+  const byDate = new Map(scenario.rateChanges.map((change) => {
+    const changeCycle = cycleIndex(scenario.startDate, change.date)!
+    return [change.date, {
+      ...change,
+      mode: changeCycle < firstPrepaymentCycle ? change.mode : 'keep-tenure' as const,
+    }]
+  }))
   prepayments.forEach((item) => {
     const start = cycleIndex(scenario.startDate, item.date)!
     const interval = frequencyInterval(item.frequency)!

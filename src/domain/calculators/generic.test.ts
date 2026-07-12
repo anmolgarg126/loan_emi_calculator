@@ -24,6 +24,21 @@ describe('Generic calculator', () => {
     expect(result.native.totalRepayment).toBe(1_274_822.84)
   })
 
+  it('ignores runtime-cast internal amortization controls', () => {
+    const base = defaultSuiteScenario('generic').value
+    const injected = {
+      ...base,
+      initialEmiOverride: 1,
+      keepTenureTargetMonths: 1,
+    } as GenericScenario
+
+    const expected = calculateSuite({ kind: 'generic', value: base })
+    const result = calculateSuite({ kind: 'generic', value: injected })
+
+    expect(result.native).toEqual(expected.native)
+    expect(result.view).toEqual(expected.view)
+  })
+
   it('amortizes a zero-rate loan without interest', () => {
     const result = calculateSuite(genericWith({
       principal: 120_000,
