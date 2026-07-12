@@ -15,7 +15,10 @@ Every input and calculation stays in the current browser tab. The app has no bac
 - Affordability, tenure, interest-rate, and prepayment solvers.
 - Interactive yearly/monthly graph linked to the schedule, with series controls, ranges, OD comparison, keyboard navigation, and touch tooltips.
 - Replaceable amount inputs with Indian lakh/crore grouping and compact rupee words; percentage-based amounts show their calculated rupee equivalent.
+- Live cost summaries inside applicable sections, separating monthly cost, one-time cost, planned extra cash flow, and expected proceeds.
+- A reconciled result overview showing loan composition, EMI plus recurring costs, total interest, other charges, total loan payable, and gross/net cost across the selected tenure.
 - Full-calculator reset with a 10-second undo; explicit remember, restore, and confirmed delete on the current device.
+- Light mode by default with an accessible dark-mode icon toggle; the visual preference is remembered locally and contains no financial data.
 - Print/PDF, machine-readable CSV, and XLSX with native date, number, percentage, integer, and Boolean cells.
 
 ### Editing amounts
@@ -53,6 +56,8 @@ npm run test:e2e
 
 `npm run verify` runs lint, type-checking, unit tests, and a production build. Playwright covers desktop Chromium, Firefox, and WebKit plus Pixel 5 and iPhone 13 emulation.
 
+The initial JavaScript and CSS stay within an 85 kB gzip budget. The large Excel library remains lazy and loads only after the user requests an XLSX export.
+
 To test the exact GitHub Pages subpath:
 
 ```sh
@@ -87,6 +92,8 @@ Change `--private` to `--public` if desired. The workflow uses read-only reposit
 - Home OD interest uses lender-neutral Actual/365 daily rest on net utilization.
 - Rate changes default to keeping EMI unchanged and adjusting tenure; eligible flows also offer keeping tenure and adjusting EMI.
 - Ownership costs and estimated resale values are displayed separately from loan principal and interest.
+- One-time fees are never converted into a monthly cost. Prepayments and OD parked funds are shown as planned cash flow, not expense; resale value is deducted only in the separate net-cost figure.
+- Financed charges, deductions, balloon payments, and capitalized interest are counted once in the applicable principal or repayment total. Section totals and the overall tenure view use the same derived breakdown.
 - Results are educational estimates. Confirm lender-specific rules, taxes, fees, day-count conventions, and repayment terms before making a financial decision.
 
 See [plan.md](./plan.md), the [approved suite design](./docs/superpowers/specs/2026-07-12-calculator-suite-redesign-design.md), and [AI_CONTEXT.md](./AI_CONTEXT.md).

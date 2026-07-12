@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useReducer, useRef, useState, type ReactNode } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from 'react'
 import { CalculatorShell } from './components/CalculatorShell'
 import { ResultSummary } from './components/ResultSummary'
 import { CarForm } from './components/calculators/CarForm'
@@ -7,6 +7,7 @@ import { GenericForm } from './components/calculators/GenericForm'
 import { HomeForm } from './components/calculators/HomeForm'
 import { PersonalForm } from './components/calculators/PersonalForm'
 import type { CalculatorKind, SolverKind, SuiteScenario } from './domain/calculators'
+import { buildCostBreakdown } from './domain/calculators/cost-breakdown'
 import { createInitialSuiteModel, reduceSuiteModel } from './lib/suite-state'
 import { deleteRememberedScenario, readRememberedScenario, saveRememberedScenario } from './lib/remembered-scenario'
 import { copyScenarioUrl, decodeSharedScenario } from './lib/share'
@@ -46,6 +47,7 @@ function App() {
   const current = model.currentResult
   const displayed = current.view.errors.length === 0 || model.lastValidResult.kind !== current.kind
     ? current : model.lastValidResult
+  const costs = useMemo(() => buildCostBreakdown(displayed), [displayed])
   const issueFor = (field: string) => current.view.issues.find((issue) => issue.field === field)?.message
 
   useEffect(() => {
@@ -138,15 +140,15 @@ function App() {
 
   const form = (() => {
     switch (model.scenario.kind) {
-      case 'generic': return <GenericForm scenario={model.scenario.value} issueFor={issueFor} onChange={(value) => setScenario({ kind: 'generic', value })} />
-      case 'home': return <HomeForm scenario={model.scenario.value} result={current.kind === 'home' ? current.native : displayed.native as never} issueFor={issueFor} onChange={(value) => setScenario({ kind: 'home', value })} />
-      case 'car': return <CarForm scenario={model.scenario.value} issueFor={issueFor} onChange={(value) => setScenario({ kind: 'car', value })} />
-      case 'personal': return <PersonalForm scenario={model.scenario.value} issueFor={issueFor} onChange={(value) => setScenario({ kind: 'personal', value })} />
-      case 'education': return <EducationForm scenario={model.scenario.value} issueFor={issueFor} onChange={(value) => setScenario({ kind: 'education', value })} />
+      case 'generic': return <GenericForm scenario={model.scenario.value} costs={costs.sections} issueFor={issueFor} onChange={(value) => setScenario({ kind: 'generic', value })} />
+      case 'home': return <HomeForm scenario={model.scenario.value} result={current.kind === 'home' ? current.native : displayed.native as never} costs={costs.sections} issueFor={issueFor} onChange={(value) => setScenario({ kind: 'home', value })} />
+      case 'car': return <CarForm scenario={model.scenario.value} costs={costs.sections} issueFor={issueFor} onChange={(value) => setScenario({ kind: 'car', value })} />
+      case 'personal': return <PersonalForm scenario={model.scenario.value} costs={costs.sections} issueFor={issueFor} onChange={(value) => setScenario({ kind: 'personal', value })} />
+      case 'education': return <EducationForm scenario={model.scenario.value} costs={costs.sections} issueFor={issueFor} onChange={(value) => setScenario({ kind: 'education', value })} />
     }
   })()
 
-  const resultPanel = <ResultSummary current={current} displayed={displayed} shared={model.shared} hasUndo={Boolean(model.undo)} hasRemembered={hasRemembered} exporting={exporting} status={status} onReset={reset} onUndo={undoReset} onRemember={remember} onRestore={restore} onDeleteRemembered={removeRemembered} onShare={share} onPrint={print} onCsv={exportCsv} onXlsx={exportXlsx} />
+  const resultPanel = <ResultSummary current={current} displayed={displayed} costs={costs} shared={model.shared} hasUndo={Boolean(model.undo)} hasRemembered={hasRemembered} exporting={exporting} status={status} onReset={reset} onUndo={undoReset} onRemember={remember} onRestore={restore} onDeleteRemembered={removeRemembered} onShare={share} onPrint={print} onCsv={exportCsv} onXlsx={exportXlsx} />
 
   const selectPeriod = (period: string | null) => dispatch({ type: 'set-graph', graph: { selectedPeriod: period } })
   const analysis = <DeferredAnalysis force={analysisRequested}><Suspense fallback={<section className="analysis-placeholder"><h2>Payment trajectory</h2><p>Preparing graph and schedule…</p></section>}><AnalysisDetails result={displayed} graph={model.graph} onGraphChange={(graph) => dispatch({ type: 'set-graph', graph })} onSelectPeriod={selectPeriod} /></Suspense></DeferredAnalysis>

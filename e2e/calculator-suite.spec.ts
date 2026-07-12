@@ -87,3 +87,49 @@ test('shows rupee words for percentage-based amount fields', async ({ page }) =>
   await fee.blur()
   await expect(page.locator('#personal-fee-amount')).toHaveText('Equivalent: ₹10,000 · Ten thousand rupees')
 })
+
+test('shows monthly and one-time totals in applicable calculator sections', async ({ page }) => {
+  const section = (title: string) => page.locator('.guided-section').filter({ hasText: title }).first()
+
+  await page.goto('./?calculator=generic')
+  await page.getByText('Fees', { exact: true }).click()
+  await page.getByLabel('Processing fee', { exact: true }).fill('2500')
+  await page.getByLabel('Processing fee', { exact: true }).blur()
+  await expect(section('Fees').locator('.section-financial-brief > span')).toHaveCount(1)
+  await expect(section('Fees').locator('.section-financial-brief')).toContainText('₹2,500 once')
+
+  await page.goto('./?calculator=home')
+  await expect(section('Ownership and lender costs').locator('.section-financial-brief > span')).toHaveCount(2)
+  await expect(section('Ownership and lender costs').locator('.section-financial-brief')).toContainText('₹3,750/mo')
+  await expect(section('Ownership and lender costs').locator('.section-financial-brief')).toContainText('₹5,10,000 once')
+
+  await page.goto('./?calculator=car')
+  await page.getByText('On-road financing', { exact: true }).click()
+  await page.getByLabel('Processing fee', { exact: true }).fill('2000')
+  await page.getByLabel('Processing fee', { exact: true }).blur()
+  await expect(section('On-road financing').locator('.section-financial-brief')).toContainText('₹2,000 once')
+
+  await page.goto('./?calculator=personal')
+  await page.getByText('Upfront deductions', { exact: true }).click()
+  await page.getByLabel('Processing fee', { exact: true }).fill('1000')
+  await page.getByLabel('Processing fee', { exact: true }).blur()
+  await expect(section('Upfront deductions').locator('.section-financial-brief')).toContainText('₹1,180 once')
+
+  await page.goto('./?calculator=education')
+  await page.getByLabel('Processing fee', { exact: true }).fill('5000')
+  await page.getByLabel('Processing fee', { exact: true }).blur()
+  await expect(section('Repayment').locator('.section-financial-brief')).toContainText('₹5,000 once')
+})
+
+test('keeps OD parked contributions separate from cost', async ({ page }) => {
+  await page.goto('./?calculator=home')
+  const overdraft = page.locator('.guided-section').filter({ hasText: 'Overdraft facility' })
+  await page.getByText('Overdraft facility', { exact: true }).click()
+  await page.getByLabel('Add overdraft facility').check()
+  await page.getByLabel('Fixed monthly contribution').fill('20000')
+  await page.getByLabel('Fixed monthly contribution').blur()
+
+  await expect(overdraft.locator('.section-financials')).toContainText('Planned cash flow / month')
+  await expect(overdraft.locator('.section-financials')).toContainText('₹20,000')
+  await expect(overdraft.locator('.section-financials')).not.toContainText('Monthly cost₹20,000')
+})

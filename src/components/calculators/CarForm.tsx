@@ -1,10 +1,12 @@
 import type { CarScenario } from '../../domain/calculators'
+import type { SectionCostSummary } from '../../domain/calculators/cost-breakdown'
 import { DateField, ModeToggle, NumberField, Switch } from '../CalculatorFields'
 import { GuidedSection } from '../GuidedSection'
 import { PrepaymentFields, RateChangeFields } from './LoanEventFields'
 
-export function CarForm({ scenario, onChange, issueFor }: {
+export function CarForm({ scenario, costs, onChange, issueFor }: {
   scenario: CarScenario
+  costs: Record<string, SectionCostSummary>
   onChange: (scenario: CarScenario) => void
   issueFor: (field: string) => string | undefined
 }) {
@@ -22,7 +24,7 @@ export function CarForm({ scenario, onChange, issueFor }: {
         <DateField id="car-start" label="First EMI date" value={scenario.startDate} onChange={(value) => set('startDate', value)} error={issueFor('startDate')} />
       </div>
     </GuidedSection>
-    <GuidedSection step={2} title="On-road financing" description="Registration, insurance, and lender fee" optional configured={scenario.registrationFees + scenario.financedInsurance + scenario.processingFee > 0}>
+    <GuidedSection step={2} title="On-road financing" description="Registration, insurance, and lender fee" optional configured={scenario.registrationFees + scenario.financedInsurance + scenario.processingFee > 0} financial={costs.onRoad}>
       <div className="field-grid">
         <NumberField id="registration-fees" label="Registration and on-road fees" value={scenario.registrationFees} onChange={(value) => set('registrationFees', value)} prefix="₹" error={issueFor('registrationFees')} />
         <Switch id="finance-registration" checked={scenario.financeRegistrationFees} onChange={(value) => set('financeRegistrationFees', value)} label="Finance registration fees" description="Include them in principal instead of paying upfront." />
@@ -30,14 +32,14 @@ export function CarForm({ scenario, onChange, issueFor }: {
         <NumberField id="car-processing-fee" label="Processing fee" value={scenario.processingFee} onChange={(value) => set('processingFee', value)} prefix="₹" error={issueFor('processingFee')} />
       </div>
     </GuidedSection>
-    <GuidedSection step={3} title="Balloon and ownership horizon" description="Keep the final obligation separate from expected resale" optional configured={scenario.balloonAmount + scenario.expectedResaleValue > 0 || scenario.ownershipMonths !== scenario.tenureMonths}>
+    <GuidedSection step={3} title="Balloon and ownership horizon" description="Keep the final obligation separate from expected resale" optional configured={scenario.balloonAmount + scenario.expectedResaleValue > 0 || scenario.ownershipMonths !== scenario.tenureMonths} financial={costs.balloon}>
       <div className="field-grid">
         <NumberField id="balloon-amount" label="Contractual balloon payment" value={scenario.balloonAmount} onChange={(value) => set('balloonAmount', value)} prefix="₹" error={issueFor('balloonAmount')} />
         <NumberField id="resale-value" label="Expected resale value" value={scenario.expectedResaleValue} onChange={(value) => set('expectedResaleValue', value)} prefix="₹" error={issueFor('expectedResaleValue')} />
         <NumberField id="ownership-months" label="Ownership horizon" value={scenario.ownershipMonths} onChange={(value) => set('ownershipMonths', Math.round(value))} suffix="months" max={scenario.tenureMonths} step={1} error={issueFor('ownershipMonths')} />
       </div>
     </GuidedSection>
-    <GuidedSection step={4} title="Repayment changes" description="Prepayments and future rate resets" optional configured={scenario.prepayments.length + scenario.rateChanges.length > 0}>
+    <GuidedSection step={4} title="Repayment changes" description="Prepayments and future rate resets" optional configured={scenario.prepayments.length + scenario.rateChanges.length > 0} financial={costs.repayment}>
       <h3>Prepayments</h3><PrepaymentFields items={scenario.prepayments} startDate={scenario.startDate} onChange={(value) => set('prepayments', value)} issueFor={issueFor} />
       <h3>Rate changes</h3><RateChangeFields items={scenario.rateChanges} startDate={scenario.startDate} onChange={(value) => set('rateChanges', value)} issueFor={issueFor} />
     </GuidedSection>

@@ -89,3 +89,50 @@ test('supports arrow-key navigation between calculator tabs', async ({ page }) =
   await expect(home).toHaveAttribute('aria-selected', 'true')
   await expectHealthyPage(page, errors)
 })
+
+test('remembers the selected theme after refresh', async ({ page }) => {
+  await page.goto('./')
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
+
+  await page.getByRole('button', { name: 'Switch to dark mode' }).click()
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+
+  await page.reload()
+  await expect(page.getByRole('button', { name: 'Switch to light mode' })).toBeVisible()
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+})
+
+test('applies complete dark tokens without shrinking the theme target', async ({ page }) => {
+  await page.goto('./')
+  const light = await page.evaluate(() => ({
+    body: getComputedStyle(document.body).backgroundColor,
+    input: getComputedStyle(document.querySelector('.input-shell')!).backgroundColor,
+  }))
+
+  const toggle = page.getByRole('button', { name: 'Switch to dark mode' })
+  await toggle.click()
+  const dark = await page.evaluate(() => {
+    const root = getComputedStyle(document.documentElement)
+    return {
+      body: getComputedStyle(document.body).backgroundColor,
+      input: getComputedStyle(document.querySelector('.input-shell')!).backgroundColor,
+      lineStrong: root.getPropertyValue('--line-strong').trim(),
+      graphGrid: root.getPropertyValue('--graph-grid').trim(),
+    }
+  })
+  const target = await page.locator('.theme-toggle').evaluate((element) => element.getBoundingClientRect().toJSON())
+
+  expect(dark.body).not.toBe(light.body)
+  expect(dark.input).not.toBe(light.input)
+  expect(dark.lineStrong).not.toBe('')
+  expect(dark.graphGrid).not.toBe('')
+  expect(target.width).toBeGreaterThanOrEqual(44)
+  expect(target.height).toBeGreaterThanOrEqual(44)
+
+  await page.emulateMedia({ media: 'print' })
+  const print = await page.evaluate(() => ({
+    body: getComputedStyle(document.body).backgroundColor,
+    input: getComputedStyle(document.querySelector('.input-shell')!).backgroundColor,
+  }))
+  expect(print).toEqual(light)
+})

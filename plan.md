@@ -1415,6 +1415,8 @@ git commit -m "docs: record calculator suite guarantees"
 - [x] Reset supports undo and does not delete remembered data; deletion is a separate confirmed action.
 - [x] Share links are calculator-aware, v1 Home links remain readable, and malformed data is rejected atomically.
 - [x] The interactive graph supports tooltips, series toggles, range focus, yearly/monthly views, OD comparison, and two-way schedule linkage.
+- [x] Every applicable section shows its monthly, one-time, total, planned-cash-flow, or proceeds effect without mislabelling OD liquidity or prepayments as cost.
+- [x] Every calculator reconciles loan composition, interest, other charges, loan payable, and gross/net overall cost for the selected tenure.
 - [x] Graph values, schedules, CSV, typed XLSX, and print outputs reconcile.
 - [x] Calm teal product styling replaces the oversized editorial hero and decorative grid while preserving accessibility.
 - [x] Root and GitHub Pages subpath matrices pass in five browser projects.

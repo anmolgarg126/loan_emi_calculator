@@ -20,6 +20,8 @@ The redesigned product must:
 
 Amount-input editing and Indian formatting are further specified by `2026-07-12-indian-amount-inputs-design.md`. Monetary inputs use Indian digit grouping outside active editing, may be cleared without a persistent leading zero, and expose readable rupee words. Percentage-based amount inputs show their calculated rupee equivalent and words; pure rates and tenures do not.
 
+Section-level monthly/one-time summaries, loan composition, total other charges, total loan payable, and total all-in outflow are further specified by `2026-07-12-section-cost-breakdowns-design.md`. These values derive from validated calculator results and must not double-count financed charges, deductions, capitalized interest, balloons, or prepayments.
+
 ## 2. Approved design direction
 
 The visual direction combines:

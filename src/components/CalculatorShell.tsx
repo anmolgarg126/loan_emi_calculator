@@ -1,5 +1,6 @@
-import type { KeyboardEvent, ReactNode } from 'react'
+import { useState, type KeyboardEvent, type ReactNode } from 'react'
 import type { CalculatorKind, SolverKind } from '../domain/calculators'
+import { applyTheme, readTheme } from '../lib/theme'
 
 const calculators: Array<{ kind: CalculatorKind; label: string }> = [
   { kind: 'generic', label: 'Generic' },
@@ -24,6 +25,12 @@ export function CalculatorShell({ activeKind, onSelectKind, onSelectSolver, form
   graph: ReactNode
   schedule: ReactNode
 }) {
+  const [theme, setTheme] = useState(readTheme)
+  const toggleTheme = () => {
+    const next = theme === 'light' ? 'dark' : 'light'
+    applyTheme(next)
+    setTheme(next)
+  }
   const keyNavigate = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
     if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
     event.preventDefault()
@@ -40,13 +47,18 @@ export function CalculatorShell({ activeKind, onSelectKind, onSelectSolver, form
           <span className="brand-mark" aria-hidden="true">L</span>
           <span><strong>Loan EMI Calculator</strong><small>Plan the full loan, not just the EMI</small></span>
         </a>
-        <div className="privacy-status"><span aria-hidden="true" />Calculated privately on this device</div>
+        <div className="header-actions">
+          <div className="privacy-status"><span aria-hidden="true" />Calculated privately on this device</div>
+          <button type="button" className="theme-toggle" aria-pressed={theme === 'dark'} aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`} title={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`} onClick={toggleTheme}>
+            <span aria-hidden="true">{theme === 'light' ? '\u263e\ufe0e' : '\u2600\ufe0e'}</span>
+          </button>
+        </div>
       </header>
       <main>
         <section className="app-intro">
           <div>
             <h1>One clear view of your loan.</h1>
-            <p>Compare repayment choices, model specialist loan terms, and inspect every payment—all without sending your numbers anywhere.</p>
+            <p>Compare repayment choices, model specialist loan terms, and inspect every payment without sending your numbers anywhere.</p>
           </div>
           <div className="privacy-facts" aria-label="Privacy facts">
             <span>Client-side calculations</span><span>No account</span><span>No tracking</span>

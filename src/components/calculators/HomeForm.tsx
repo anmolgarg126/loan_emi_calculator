@@ -1,14 +1,16 @@
 import { addMonths, type CalculationResult, type LoanScenario, type OdTransaction } from '../../domain/loan'
 import { formatAmountHelper, formatIndianAmountInput } from '../../lib/indian-amount'
+import type { SectionCostSummary } from '../../domain/calculators/cost-breakdown'
 import { DateField, ModeToggle, NumberField, SelectField, Switch } from '../CalculatorFields'
 import { GuidedSection } from '../GuidedSection'
 import { PrepaymentFields, RateChangeFields } from './LoanEventFields'
 
 const id = () => crypto.randomUUID()
 
-export function HomeForm({ scenario, result, onChange, issueFor }: {
+export function HomeForm({ scenario, result, costs, onChange, issueFor }: {
   scenario: LoanScenario
   result: CalculationResult
+  costs: Record<string, SectionCostSummary>
   onChange: (scenario: LoanScenario) => void
   issueFor: (field: string) => string | undefined
 }) {
@@ -29,7 +31,7 @@ export function HomeForm({ scenario, result, onChange, issueFor }: {
         <DateField id="start-date" label="Loan / EMI cycle start" value={scenario.startDate} onChange={(value) => set('startDate', value)} hint="The first payment is one month later." error={issueFor('startDate')} />
       </div>
     </GuidedSection>
-    <GuidedSection step={2} title="Ownership and lender costs" description="Fees and ongoing costs outside principal" optional configured={scenario.processingFee + scenario.oneTimeExpenses + scenario.propertyTaxAnnual + scenario.homeInsuranceAnnual + scenario.maintenanceMonthly > 0}>
+    <GuidedSection step={2} title="Ownership and lender costs" description="Fees and ongoing costs outside principal" optional configured={scenario.processingFee + scenario.oneTimeExpenses + scenario.propertyTaxAnnual + scenario.homeInsuranceAnnual + scenario.maintenanceMonthly > 0} financial={costs.ownership}>
       <div className="field-grid">
         {([
           ['processingFee', 'processingFeeMode', 'Processing fee', '% of loan'],
@@ -44,11 +46,11 @@ export function HomeForm({ scenario, result, onChange, issueFor }: {
         <NumberField id="maintenance-monthly" label="Monthly maintenance" value={scenario.maintenanceMonthly} onChange={(value) => set('maintenanceMonthly', value)} prefix="₹" error={issueFor('maintenanceMonthly')} />
       </div>
     </GuidedSection>
-    <GuidedSection step={3} title="Repayment changes" description="Prepayments and future lender rate resets" optional configured={scenario.prepayments.length + scenario.rateChanges.length > 0}>
+    <GuidedSection step={3} title="Repayment changes" description="Prepayments and future lender rate resets" optional configured={scenario.prepayments.length + scenario.rateChanges.length > 0} financial={costs.repayment}>
       <h3>Prepayments</h3><PrepaymentFields items={scenario.prepayments} startDate={scenario.startDate} onChange={(value) => set('prepayments', value)} issueFor={issueFor} />
       <h3>Rate changes</h3><RateChangeFields items={scenario.rateChanges} startDate={scenario.startDate} onChange={(value) => set('rateChanges', value)} issueFor={issueFor} />
     </GuidedSection>
-    <GuidedSection step={4} title="Overdraft facility" description="Park surplus while keeping it available" optional configured={scenario.od.enabled}>
+    <GuidedSection step={4} title="Overdraft facility" description="Park surplus while keeping it available" optional configured={scenario.od.enabled} financial={costs.od}>
       <Switch id="od-enabled" checked={scenario.od.enabled} onChange={(value) => setOd('enabled', value)} label="Add overdraft facility" description="Off by default. Compare OD interest and fees with the standard loan." />
       {scenario.od.enabled && <div className="nested-fields">
         <div className="field-grid">

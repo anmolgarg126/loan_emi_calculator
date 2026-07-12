@@ -1,10 +1,12 @@
 import type { GenericScenario } from '../../domain/calculators'
+import type { SectionCostSummary } from '../../domain/calculators/cost-breakdown'
 import { DateField, NumberField } from '../CalculatorFields'
 import { GuidedSection } from '../GuidedSection'
 import { PrepaymentFields, RateChangeFields } from './LoanEventFields'
 
-export function GenericForm({ scenario, onChange, issueFor }: {
+export function GenericForm({ scenario, costs, onChange, issueFor }: {
   scenario: GenericScenario
+  costs: Record<string, SectionCostSummary>
   onChange: (scenario: GenericScenario) => void
   issueFor: (field: string) => string | undefined
 }) {
@@ -18,10 +20,10 @@ export function GenericForm({ scenario, onChange, issueFor }: {
         <DateField id="generic-start" label="First EMI date" value={scenario.startDate} onChange={(value) => set('startDate', value)} error={issueFor('startDate')} />
       </div>
     </GuidedSection>
-    <GuidedSection step={2} title="Fees" description="Add lender processing charges" optional configured={scenario.processingFee > 0}>
+    <GuidedSection step={2} title="Fees" description="Add lender processing charges" optional configured={scenario.processingFee > 0} financial={costs.fees}>
       <NumberField id="generic-fee" label="Processing fee" value={scenario.processingFee} onChange={(value) => set('processingFee', value)} prefix="₹" error={issueFor('processingFee')} />
     </GuidedSection>
-    <GuidedSection step={3} title="Repayment changes" description="Model prepayments or future rate changes" optional configured={scenario.prepayments.length + scenario.rateChanges.length > 0}>
+    <GuidedSection step={3} title="Repayment changes" description="Model prepayments or future rate changes" optional configured={scenario.prepayments.length + scenario.rateChanges.length > 0} financial={costs.repayment}>
       <h3>Prepayments</h3><PrepaymentFields items={scenario.prepayments} startDate={scenario.startDate} onChange={(value) => set('prepayments', value)} issueFor={issueFor} />
       <h3>Rate changes</h3><RateChangeFields items={scenario.rateChanges} startDate={scenario.startDate} onChange={(value) => set('rateChanges', value)} issueFor={issueFor} />
     </GuidedSection>

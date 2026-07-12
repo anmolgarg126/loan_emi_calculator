@@ -19,6 +19,26 @@ for (const [kind, rateLabel, changedRate, defaultRate] of [
     })
     await page.goto(`./?calculator=${kind}`)
     const headline = page.locator('.primary-result strong')
+    const overview = page.getByRole('region', { name: 'Cost overview' })
+    await expect(overview.locator('.cost-highlights > div')).toHaveCount(2)
+    await expect(overview.getByText('Total ongoing monthly cost', { exact: true })).toBeVisible()
+    await expect(overview.getByText('Monthly view', { exact: true })).toBeVisible()
+    await expect(overview.getByText('Loan composition', { exact: true })).toBeVisible()
+    await expect(overview.getByText('Total loan amount', { exact: true }).last()).toBeVisible()
+    await expect(overview.getByText('Total interest', { exact: true })).toBeVisible()
+    await expect(overview.getByText('Total other charges', { exact: true })).toBeVisible()
+    await expect(overview.getByText('Total loan payable', { exact: true })).toBeVisible()
+    await expect(overview.getByText(/Total overall cost for/)).toBeVisible()
+    await expect(page.getByRole('group', { name: 'Share and save' })).toBeVisible()
+    await expect(page.getByRole('group', { name: 'Print and export' })).toBeVisible()
+    await expect(page.locator('.metric-list')).toContainText('Payoff date')
+    for (const duplicate of ({
+      generic: ['Total interest', 'Total repayment'],
+      home: ['Loan amount', 'Total interest'],
+      car: ['Financed principal', 'Total interest', 'Expected resale value'],
+      personal: ['Net amount received', 'Total deductions', 'Total interest', 'Total repayment'],
+      education: ['Total disbursed', 'Capitalized interest', 'Repayment principal', 'Total cost'],
+    } as const)[kind]) await expect(page.locator('.metric-list')).not.toContainText(duplicate)
     const initialHeadline = await headline.textContent()
     await page.getByRole('heading', { name: 'Payment trajectory' }).scrollIntoViewIfNeeded()
     const balance = page.locator('.balance-line')
@@ -47,3 +67,14 @@ for (const [kind, rateLabel, changedRate, defaultRate] of [
     expect(errors).toEqual([])
   })
 }
+
+test('car separates resale proceeds from the gross tenure cost', async ({ page }) => {
+  await page.goto('./?calculator=car')
+  await page.getByText('Balloon and ownership horizon', { exact: true }).first().click()
+  await page.getByLabel('Expected resale value').fill('300000')
+
+  const overview = page.getByRole('region', { name: 'Cost overview' })
+  await expect(overview.getByText('Expected proceeds', { exact: true }).first()).toBeVisible()
+  await expect(overview.getByText(/₹3,00,000/).first()).toBeVisible()
+  await expect(overview.getByText('Net overall cost', { exact: true })).toBeVisible()
+})

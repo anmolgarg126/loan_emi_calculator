@@ -5,10 +5,10 @@ import { formatCurrency } from '../domain/loan'
 import type { GraphState } from '../lib/suite-state'
 
 const series = [
-  { key: 'principal', label: 'Principal', color: '#87a923' },
-  { key: 'prepayment', label: 'Prepayments', color: '#cf4e32' },
-  { key: 'interest', label: 'Interest', color: '#eb8a24' },
-  { key: 'costs', label: 'Costs', color: '#694071' },
+  { key: 'principal', label: 'Principal', color: 'var(--chart-principal)' },
+  { key: 'prepayment', label: 'Prepayments', color: 'var(--chart-prepayment)' },
+  { key: 'interest', label: 'Interest', color: 'var(--chart-interest)' },
+  { key: 'costs', label: 'Costs', color: 'var(--chart-costs)' },
 ] as const
 
 const pointPath = (periods: GraphPeriod[], x: (index: number) => number, y: (value: number) => number, key: 'balance' | 'odNetUtilized') => periods

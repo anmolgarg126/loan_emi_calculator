@@ -1,13 +1,15 @@
 import { addMonths } from '../../domain/loan'
 import type { EducationDisbursement, EducationScenario } from '../../domain/calculators'
+import type { SectionCostSummary } from '../../domain/calculators/cost-breakdown'
 import { DateField, NumberField, SelectField } from '../CalculatorFields'
 import { GuidedSection } from '../GuidedSection'
 import { PrepaymentFields } from './LoanEventFields'
 
 const id = () => crypto.randomUUID()
 
-export function EducationForm({ scenario, onChange, issueFor }: {
+export function EducationForm({ scenario, costs, onChange, issueFor }: {
   scenario: EducationScenario
+  costs: Record<string, SectionCostSummary>
   onChange: (scenario: EducationScenario) => void
   issueFor: (field: string) => string | undefined
 }) {
@@ -15,7 +17,7 @@ export function EducationForm({ scenario, onChange, issueFor }: {
   const updateDisbursement = (index: number, patch: Partial<EducationDisbursement>) => set('disbursements', scenario.disbursements.map((item, position) => position === index ? { ...item, ...patch } : item))
   const repaymentStart = addMonths(scenario.startDate, scenario.studyMonths + scenario.moratoriumMonths)
   return <div className="guided-form">
-    <GuidedSection step={1} title="Study funding" description="Course cost, contribution, and dated lender disbursements" open>
+    <GuidedSection step={1} title="Study funding" description="Course cost, contribution, and dated lender disbursements" financial={costs.funding} open>
       <div className="field-grid">
         <NumberField id="course-cost" label="Course cost" value={scenario.courseCost} onChange={(value) => set('courseCost', value)} prefix="₹" error={issueFor('courseCost')} />
         <NumberField id="own-contribution" label="Own contribution" value={scenario.ownContribution} onChange={(value) => set('ownContribution', value)} prefix="₹" error={issueFor('ownContribution')} />
@@ -33,14 +35,14 @@ export function EducationForm({ scenario, onChange, issueFor }: {
         <button type="button" className="secondary-button" disabled={scenario.disbursements.length >= 100} onClick={() => set('disbursements', [...scenario.disbursements, { id: id(), date: scenario.startDate, amount: 0 }])}>Add disbursement</button>
       </div>
     </GuidedSection>
-    <GuidedSection step={2} title="Moratorium servicing" description="Choose how study-period interest is handled" open>
+    <GuidedSection step={2} title="Moratorium servicing" description="Choose how study-period interest is handled" financial={costs.moratorium} open>
       <div className="field-grid">
         <NumberField id="moratorium-months" label="Moratorium after study" value={scenario.moratoriumMonths} onChange={(value) => set('moratoriumMonths', Math.round(value))} suffix="months" max={60} step={1} error={issueFor('moratoriumMonths')} />
         <SelectField id="servicing-mode" label="Interest servicing" value={scenario.servicingMode} onChange={(value) => set('servicingMode', value as EducationScenario['servicingMode'])} error={issueFor('servicingMode')}><option value="none">Do not service</option><option value="full-interest">Pay full accrued interest monthly</option><option value="fixed-monthly">Pay a fixed monthly amount</option></SelectField>
         {scenario.servicingMode === 'fixed-monthly' && <NumberField id="servicing-amount" label="Monthly servicing amount" value={scenario.servicingAmount} onChange={(value) => set('servicingAmount', value)} prefix="₹" error={issueFor('servicingAmount')} />}
       </div>
     </GuidedSection>
-    <GuidedSection step={3} title="Repayment" description="Rate, term, fees, and optional prepayments" open>
+    <GuidedSection step={3} title="Repayment" description="Rate, term, fees, and optional prepayments" financial={costs.repayment} open>
       <div className="field-grid">
         <NumberField id="repayment-rate" label="Repayment annual rate" value={scenario.repaymentAnnualRate} onChange={(value) => set('repaymentAnnualRate', value)} suffix="%" max={50} step={0.01} error={issueFor('repaymentAnnualRate')} />
         <NumberField id="repayment-tenure" label="Repayment tenure" value={scenario.repaymentTenureMonths} onChange={(value) => set('repaymentTenureMonths', Math.round(value))} suffix="months" max={480} step={1} error={issueFor('repaymentTenureMonths')} />

@@ -1,10 +1,12 @@
 import type { PersonalScenario } from '../../domain/calculators'
+import type { SectionCostSummary } from '../../domain/calculators/cost-breakdown'
 import { DateField, ModeToggle, NumberField, SelectField } from '../CalculatorFields'
 import { GuidedSection } from '../GuidedSection'
 import { PrepaymentFields } from './LoanEventFields'
 
-export function PersonalForm({ scenario, onChange, issueFor }: {
+export function PersonalForm({ scenario, costs, onChange, issueFor }: {
   scenario: PersonalScenario
+  costs: Record<string, SectionCostSummary>
   onChange: (scenario: PersonalScenario) => void
   issueFor: (field: string) => string | undefined
 }) {
@@ -22,7 +24,7 @@ export function PersonalForm({ scenario, onChange, issueFor }: {
         <DateField id="personal-start" label="First EMI date" value={scenario.startDate} onChange={(value) => set('startDate', value)} error={issueFor('startDate')} />
       </div>
     </GuidedSection>
-    <GuidedSection step={2} title="Upfront deductions" description="See the amount you actually receive" optional configured={scenario.processingFee + scenario.insuranceDeduction + scenario.otherDeduction > 0}>
+    <GuidedSection step={2} title="Upfront deductions" description="See the amount you actually receive" optional configured={scenario.processingFee + scenario.insuranceDeduction + scenario.otherDeduction > 0} financial={costs.deductions}>
       <div className="field-grid">
         <div className="field-with-mode"><NumberField id="personal-fee" label="Processing fee" value={scenario.processingFee} onChange={(value) => set('processingFee', value)} prefix={scenario.processingFeeMode === 'amount' ? '₹' : undefined} suffix={scenario.processingFeeMode === 'percent' ? '%' : undefined} amountValue={processingFeeAmount} equivalentAmount={scenario.processingFeeMode === 'percent'} error={issueFor('processingFee')} /><ModeToggle id="personal-fee-mode" value={scenario.processingFeeMode} onChange={(value) => set('processingFeeMode', value)} percentLabel="% of principal" error={issueFor('processingFeeMode')} /></div>
         <NumberField id="gst-rate" label="GST on processing fee" value={scenario.gstRate} onChange={(value) => set('gstRate', value)} suffix="%" max={100} step={0.01} error={issueFor('gstRate')} />
@@ -30,7 +32,7 @@ export function PersonalForm({ scenario, onChange, issueFor }: {
         <NumberField id="other-deduction" label="Other deducted charges" value={scenario.otherDeduction} onChange={(value) => set('otherDeduction', value)} prefix="₹" error={issueFor('otherDeduction')} />
       </div>
     </GuidedSection>
-    <GuidedSection step={3} title="Prepayments" description="Model one-time or recurring extra payments" optional configured={scenario.prepayments.length > 0}>
+    <GuidedSection step={3} title="Prepayments" description="Model one-time or recurring extra payments" optional configured={scenario.prepayments.length > 0} financial={costs.repayment}>
       <PrepaymentFields items={scenario.prepayments} startDate={scenario.startDate} onChange={(value) => set('prepayments', value)} issueFor={issueFor} />
     </GuidedSection>
   </div>
