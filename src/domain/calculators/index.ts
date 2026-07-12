@@ -17,6 +17,25 @@ export function defaultSuiteScenario(kind: 'generic' | 'home'): SuiteScenario {
 
 export const calculateHomeAdapter = (scenario: LoanScenario): Extract<SuiteResult, { kind: 'home' }> => {
   const native = calculateLoan(scenario)
+  if (native.errors.length > 0) {
+    return {
+      kind: 'home',
+      scenario,
+      native,
+      view: {
+        primary: { id: 'standard-emi', label: 'Standard EMI', value: 0, format: 'currency' },
+        metrics: [
+          { id: 'loan-amount', label: 'Loan amount', value: Number.isFinite(native.loanAmount) ? native.loanAmount : 0, format: 'currency' },
+          { id: 'total-interest', label: 'Total interest', value: 0, format: 'currency' },
+          { id: 'payoff-date', label: 'Payoff date', value: scenario.startDate, format: 'date' },
+        ],
+        schedule: [],
+        issues: native.issues,
+        errors: native.errors,
+        warnings: native.warnings,
+      },
+    }
+  }
   const odByDate = new Map(native.od.schedule.map((row) => [row.date, row.netUtilized]))
   const schedule = native.standard.schedule.map<UnifiedScheduleRow>((row) => ({
     period: row.month,
@@ -25,7 +44,7 @@ export const calculateHomeAdapter = (scenario: LoanScenario): Extract<SuiteResul
     principal: row.principal,
     interest: row.interest,
     prepayment: row.prepayment,
-    costs: native.monthlyOwnershipCost,
+    costs: row.ownershipCost,
     balance: row.balance,
     odNetUtilized: odByDate.get(row.date),
   }))

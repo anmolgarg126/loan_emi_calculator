@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { addMonths, calculateLoan, defaultScenario, roundMoney } from '../loan'
+import { addMonths, calculateEmi, calculateLoan, defaultScenario, roundMoney } from '../loan'
 import { calculateSuite, defaultSuiteScenario } from './index'
 import type { GenericScenario } from './types'
 
@@ -10,12 +10,14 @@ const genericWith = (patch: Partial<GenericScenario>) => ({
 
 describe('Generic calculator', () => {
   it('calculates the audited lender-neutral EMI schedule', () => {
-    const result = calculateSuite(defaultSuiteScenario('generic'))
+    const scenario = defaultSuiteScenario('generic')
+    const result = calculateSuite(scenario)
 
     expect(result.kind).toBe('generic')
     expect(result.view.primary.label).toBe('Monthly EMI')
     expect(result.view.errors).toEqual([])
     expect(result.view.schedule.length).toBeGreaterThan(0)
+    expect(result.view.schedule[0]?.date).toBe(scenario.value.startDate)
     expect(result.view.schedule.at(-1)?.balance).toBe(0)
     expect(result.native.initialEmi).toBe(21_247.04)
     expect(result.native.totalInterest).toBe(274_822.84)
@@ -94,6 +96,90 @@ describe('Generic calculator', () => {
     expect(result.view.schedule).toEqual([])
   })
 
+  it.each([
+    ['prepayments', null],
+    ['prepayments', { bad: true }],
+    ['prepayments', 'bad'],
+    ['rateChanges', null],
+    ['rateChanges', { bad: true }],
+    ['rateChanges', 'bad'],
+  ] as const)('blocks a runtime-invalid %s container', (field, value) => {
+    const result = calculateSuite(genericWith({
+      [field]: value,
+    } as unknown as Partial<GenericScenario>))
+
+    expect(result.view.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ field }),
+    ]))
+    expect(result.native.schedule).toEqual([])
+    expect(result.view.schedule).toEqual([])
+    expect([
+      result.native.initialEmi,
+      result.native.totalInterest,
+      result.native.totalRepayment,
+      result.view.primary.value,
+    ].every((item) => typeof item === 'number' && Number.isFinite(item))).toBe(true)
+  })
+
+  it('applies a prepayment on its public EMI date', () => {
+    const startDate = '2026-01-31'
+    const date = addMonths(startDate, 1)
+    const result = calculateSuite(genericWith({
+      principal: 120_000,
+      annualRate: 0,
+      tenureMonths: 12,
+      startDate,
+      prepayments: [{ id: 'extra', date, amount: 20_000, frequency: 'once' }],
+    }))
+
+    expect(result.view.errors).toEqual([])
+    expect(result.view.schedule[0]?.date).toBe(startDate)
+    expect(result.view.schedule.find((row) => row.prepayment > 0)).toMatchObject({ date, prepayment: 20_000 })
+  })
+
+  it.each(['keep-emi', 'keep-tenure'] as const)('applies a %s rate change on its public EMI date', (mode) => {
+    const startDate = '2026-01-01'
+    const date = addMonths(startDate, 2)
+    const annualRate = 24
+    const result = calculateSuite(genericWith({
+      principal: 120_000,
+      annualRate: 12,
+      tenureMonths: 12,
+      startDate,
+      rateChanges: [{ id: 'reset', date, annualRate, mode }],
+    }))
+    const before = result.view.schedule[1]!
+    const changed = result.view.schedule[2]!
+
+    expect(before.date).toBe(addMonths(startDate, 1))
+    expect(before.interest).toBe(roundMoney(result.view.schedule[0]!.balance * 12 / 1200))
+    expect(before.payment).toBe(result.native.initialEmi)
+    expect(changed.date).toBe(date)
+    expect(changed.interest).toBe(roundMoney(before.balance * annualRate / 1200))
+    expect(result.scenario.rateChanges[0]?.date).toBe(date)
+    if (mode === 'keep-emi') expect(changed.payment).toBe(result.native.initialEmi)
+    else expect(changed.payment).toBe(calculateEmi(before.balance, annualRate, 10))
+  })
+
+  it('accepts events on the first EMI date and rejects dates before it', () => {
+    const startDate = '2026-01-01'
+    const valid = calculateSuite(genericWith({
+      startDate,
+      prepayments: [{ id: 'opening', date: startDate, amount: 1_000, frequency: 'once' }],
+    }))
+    const invalid = calculateSuite(genericWith({
+      startDate,
+      rateChanges: [{ id: 'early', date: '2025-12-01', annualRate: 8, mode: 'keep-tenure' }],
+    }))
+
+    expect(valid.view.errors).toEqual([])
+    expect(valid.view.schedule[0]?.prepayment).toBe(1_000)
+    expect(invalid.view.issues).toContainEqual({
+      field: 'rateChanges.early.date',
+      message: 'Rate change must fall on an EMI date on or after the first EMI date.',
+    })
+  })
+
   it('applies prepayments and both rate-reset modes through the shared engine', () => {
     const base = defaultSuiteScenario('generic').value
     const baseline = calculateSuite({ kind: 'generic', value: base })
@@ -117,10 +203,11 @@ describe('Generic calculator', () => {
 
   it('blocks partial schedules when a valid scenario becomes infeasible', () => {
     const base = defaultSuiteScenario('generic').value
+    const date = addMonths(base.startDate, 1)
     const result = calculateSuite(genericWith({
       rateChanges: [{
         id: 'payment-shock',
-        date: addMonths(base.startDate, 1),
+        date,
         annualRate: 50,
         mode: 'keep-emi',
       }],
@@ -130,6 +217,7 @@ describe('Generic calculator', () => {
       expect.objectContaining({ field: 'scenario' }),
     ]))
     expect(result.view.errors.length).toBeGreaterThan(0)
+    expect(result.view.errors.some((error) => error.includes(date))).toBe(true)
     expect(result.native.schedule).toEqual([])
     expect(result.view.schedule).toEqual([])
     expect([
@@ -172,10 +260,40 @@ describe('Generic calculator', () => {
       principal: native.standard.schedule[0]!.principal,
       interest: native.standard.schedule[0]!.interest,
       prepayment: native.standard.schedule[0]!.prepayment,
-      costs: native.monthlyOwnershipCost,
+      costs: native.standard.schedule[0]!.ownershipCost,
       balance: native.standard.schedule[0]!.balance,
       odNetUtilized: native.od.schedule[0]!.netUtilized,
     })
+    expect(result.view.schedule.slice(0, 2).map(({ costs }) => costs)).toEqual(
+      native.standard.schedule.slice(0, 2).map(({ ownershipCost }) => ownershipCost),
+    )
     expect(result.view.schedule.at(-1)?.balance).toBe(0)
+  })
+
+  it('blocks the normalized Home view when the native OD ledger aborts', () => {
+    const base = defaultScenario()
+    const scenario = {
+      ...base,
+      od: {
+        ...base.od,
+        enabled: true,
+        transactionsEnabled: true,
+        transactions: [{ id: 'invalid', date: base.startDate, type: 'withdrawal' as const, amount: 100 }],
+      },
+    }
+    const native = calculateLoan(scenario)
+    const result = calculateSuite({ kind: 'home', value: scenario })
+
+    expect(native.errors.length).toBeGreaterThan(0)
+    expect(native.standard.schedule.length).toBeGreaterThan(0)
+    expect(result.native).toEqual(native)
+    expect(result.view.primary.value).toBe(0)
+    expect(result.view.schedule).toEqual([])
+    expect(result.view.issues).toEqual(native.issues)
+    expect(result.view.errors).toEqual(native.errors)
+    expect(result.view.warnings).toEqual(native.warnings)
+    expect(result.view.metrics
+      .filter((metric) => typeof metric.value === 'number')
+      .every((metric) => Number.isFinite(metric.value))).toBe(true)
   })
 })

@@ -1,5 +1,6 @@
 import { buildAmortizationSchedule } from '../amortization'
 import {
+  addMonths,
   cycleIndex,
   defaultScenario,
   roundMoney,
@@ -40,7 +41,6 @@ const validateGeneric = (scenario: GenericScenario): ValidationIssue[] => {
   const itemField = (list: string, id: unknown, index: number, field: string) =>
     `${list}.${typeof id === 'string' && id.trim() ? id : index}.${field}`
   const validCycle = (date: unknown) => typeof date === 'string'
-    && date !== scenario.startDate
     && cycleIndex(scenario.startDate, date) !== null
 
   if (!Number.isFinite(scenario.principal) || scenario.principal <= 0 || scenario.principal > MAX_MONEY) {
@@ -59,7 +59,9 @@ const validateGeneric = (scenario: GenericScenario): ValidationIssue[] => {
     add('processingFee', 'Processing fee must be between ₹0 and ₹100 crore.')
   }
 
-  const prepayments: unknown[] = scenario.prepayments
+  const prepaymentsValue: unknown = scenario.prepayments
+  const prepayments: unknown[] = Array.isArray(prepaymentsValue) ? prepaymentsValue : []
+  if (!Array.isArray(prepaymentsValue)) add('prepayments', 'Prepayments must be a list.')
   const validPrepayments = prepayments.filter(isRecord)
   const prepaymentIds = validPrepayments
     .map(({ id }) => id)
@@ -75,7 +77,7 @@ const validateGeneric = (scenario: GenericScenario): ValidationIssue[] => {
       add(itemField('prepayments', item.id, index, 'id'), 'Prepayment IDs must not be blank.')
     }
     if (!validCycle(item.date)) {
-      add(itemField('prepayments', item.id, index, 'date'), 'Prepayment must fall on a future EMI cycle date.')
+      add(itemField('prepayments', item.id, index, 'date'), 'Prepayment must fall on an EMI date on or after the first EMI date.')
     }
     if (typeof item.amount !== 'number' || !Number.isFinite(item.amount) || item.amount < 0 || item.amount > MAX_MONEY) {
       add(itemField('prepayments', item.id, index, 'amount'), 'Prepayment must be between ₹0 and ₹100 crore.')
@@ -86,7 +88,9 @@ const validateGeneric = (scenario: GenericScenario): ValidationIssue[] => {
     }
   })
 
-  const rateChanges: unknown[] = scenario.rateChanges
+  const rateChangesValue: unknown = scenario.rateChanges
+  const rateChanges: unknown[] = Array.isArray(rateChangesValue) ? rateChangesValue : []
+  if (!Array.isArray(rateChangesValue)) add('rateChanges', 'Rate changes must be a list.')
   const validRateChanges = rateChanges.filter(isRecord)
   const rateIds = validRateChanges
     .map(({ id }) => id)
@@ -102,7 +106,7 @@ const validateGeneric = (scenario: GenericScenario): ValidationIssue[] => {
       add(itemField('rateChanges', change.id, index, 'id'), 'Rate-change IDs must not be blank.')
     }
     if (!validCycle(change.date)) {
-      add(itemField('rateChanges', change.id, index, 'date'), 'Rate change must fall on a future EMI cycle date.')
+      add(itemField('rateChanges', change.id, index, 'date'), 'Rate change must fall on an EMI date on or after the first EMI date.')
     }
     if (typeof change.annualRate !== 'number' || !Number.isFinite(change.annualRate)
       || change.annualRate < 0 || change.annualRate > 50) {
@@ -157,17 +161,39 @@ export const calculateGeneric = (scenario: GenericScenario): Extract<SuiteResult
   const validationIssues = validateGeneric(scenario)
   if (validationIssues.length > 0) return blockingResult(scenario, validationIssues)
 
-  const amortization = buildAmortizationSchedule({ ...scenario, balloonAmount: 0 })
+  const engineStartDate = addMonths(scenario.startDate, -1)
+  const engineRateDates = new Map<string, string>()
+  const amortization = buildAmortizationSchedule({
+    ...scenario,
+    startDate: engineStartDate,
+    prepayments: scenario.prepayments.map((prepayment) => ({
+      ...prepayment,
+      date: addMonths(engineStartDate, cycleIndex(scenario.startDate, prepayment.date)! + 1),
+    })),
+    rateChanges: scenario.rateChanges.map((change) => {
+      const date = addMonths(engineStartDate, cycleIndex(scenario.startDate, change.date)!)
+      engineRateDates.set(date, change.date)
+      return { ...change, date }
+    }),
+    balloonAmount: 0,
+  })
+  const engineErrors = amortization.errors.map((message) => {
+    let publicMessage = message
+    engineRateDates.forEach((publicDate, engineDate) => {
+      publicMessage = publicMessage.replace(engineDate, publicDate)
+    })
+    return publicMessage
+  })
   if (amortization.errors.length > 0) {
     return blockingResult(
       scenario,
-      amortization.errors.map((message) => ({ field: 'scenario', message })),
+      engineErrors.map((message) => ({ field: 'scenario', message })),
       amortization.warnings,
     )
   }
   const schedule = amortization.rows.map<UnifiedScheduleRow>((row) => ({
     period: row.month,
-    date: row.date,
+    date: addMonths(scenario.startDate, row.month - 1),
     payment: row.emi,
     principal: row.principal,
     interest: row.interest,
@@ -177,12 +203,11 @@ export const calculateGeneric = (scenario: GenericScenario): Extract<SuiteResult
   }))
   const totalInterest = roundMoney(amortization.totalInterest)
   const totalRepayment = roundMoney(scenario.principal + totalInterest + scenario.processingFee)
-  const issues = amortization.errors.map((message) => ({ field: 'scenario', message }))
   const native: GenericResult = {
     initialEmi: amortization.initialEmi,
     totalInterest,
     totalRepayment,
-    payoffDate: amortization.payoffDate,
+    payoffDate: schedule.at(-1)?.date ?? scenario.startDate,
     schedule,
   }
   return {
@@ -199,8 +224,8 @@ export const calculateGeneric = (scenario: GenericScenario): Extract<SuiteResult
         { id: 'processing-fee', label: 'Processing fee', value: scenario.processingFee, format: 'currency' },
       ],
       schedule,
-      issues,
-      errors: amortization.errors,
+      issues: [],
+      errors: [],
       warnings: amortization.warnings,
     },
   }
