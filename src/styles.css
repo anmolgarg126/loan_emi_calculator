@@ -145,6 +145,9 @@ main { width: min(1440px, 100%); margin: 0 auto; }
 
 .payment-graph, .suite-schedule { padding: 40px clamp(20px, 4vw, 64px); background: var(--surface); border-bottom: 1px solid var(--line); }
 .payment-graph { background: #f8fbfb; }
+.analysis-placeholder { min-height: 190px; display: grid; place-content: center; padding: 40px 20px; border-bottom: 1px solid var(--line); background: var(--accent-soft); text-align: center; }
+.analysis-placeholder h2 { margin: 0; font-size: 25px; }
+.analysis-placeholder p { margin: 8px 0 0; color: var(--muted); }
 .section-heading { display: flex; align-items: start; justify-content: space-between; gap: 24px; margin-bottom: 20px; }
 .section-heading > span { padding: 7px 10px; border-radius: 999px; background: var(--surface-muted); color: var(--muted); font-size: 12px; font-weight: 700; }
 .table-scroll { max-width: 100%; overflow-x: auto; }

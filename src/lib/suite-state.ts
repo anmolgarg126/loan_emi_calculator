@@ -5,7 +5,6 @@ import {
   type SuiteResult,
   type SuiteScenario,
 } from '../domain/calculators'
-import { decodeSharedScenario } from './share'
 
 export interface GraphState {
   granularity: 'yearly' | 'monthly'
@@ -29,6 +28,7 @@ export type SuiteAction =
   | { type: 'set-scenario'; scenario: SuiteScenario }
   | { type: 'select-kind'; kind: CalculatorKind }
   | { type: 'restore'; scenario: SuiteScenario }
+  | { type: 'load-shared'; scenario: SuiteScenario }
   | { type: 'reset'; now: number }
   | { type: 'undo-reset'; now: number }
   | { type: 'expire-undo'; now: number }
@@ -82,6 +82,8 @@ export const reduceSuiteModel = (current: SuiteModel, action: SuiteAction): Suit
       return transition(current, defaultSuiteScenario(action.kind), defaultGraphState())
     case 'restore':
       return transition(current, action.scenario, defaultGraphState())
+    case 'load-shared':
+      return transition(current, action.scenario, defaultGraphState(), true)
     case 'reset':
       return transition(
         current,
@@ -105,9 +107,8 @@ export const reduceSuiteModel = (current: SuiteModel, action: SuiteAction): Suit
 
 const calculatorKinds = new Set<CalculatorKind>(['generic', 'home', 'car', 'personal', 'education'])
 
-export const createInitialSuiteModel = (href = window.location.href) => {
+export const createInitialSuiteModel = (href = window.location.href, shared?: SuiteScenario) => {
   const url = new URL(href)
-  const shared = decodeSharedScenario(url.hash)
   if (shared) return createSuiteModel(shared, true)
   const query = url.searchParams.get('calculator') as CalculatorKind | null
   return createSuiteModel(defaultSuiteScenario(query && calculatorKinds.has(query) ? query : 'generic'))

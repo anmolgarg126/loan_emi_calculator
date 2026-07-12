@@ -20,6 +20,7 @@ for (const [kind, rateLabel, changedRate, defaultRate] of [
     await page.goto(`./?calculator=${kind}`)
     const headline = page.locator('.primary-result strong')
     const initialHeadline = await headline.textContent()
+    await page.getByRole('heading', { name: 'Payment trajectory' }).scrollIntoViewIfNeeded()
     const balance = page.locator('.balance-line')
     const initialPath = await balance.getAttribute('d')
     const rate = page.getByLabel(rateLabel)

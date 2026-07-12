@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import { defaultCarScenario, defaultSuiteScenario } from '../domain/calculators'
-import { encodeSuiteScenario } from './share'
 import { createInitialSuiteModel, createSuiteModel, reduceSuiteModel } from './suite-state'
 
 describe('suite state', () => {
@@ -58,7 +57,7 @@ describe('suite state', () => {
 
   it('lets a valid shared scenario win over the calculator query', () => {
     const shared = defaultSuiteScenario('personal')
-    const model = createInitialSuiteModel(`https://example.test/app/?calculator=car#${encodeSuiteScenario(shared)}`)
+    const model = createInitialSuiteModel('https://example.test/app/?calculator=car#v2=deferred', shared)
 
     expect(model.scenario).toEqual(shared)
     expect(model.shared).toBe(true)

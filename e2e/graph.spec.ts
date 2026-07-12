@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test'
 
 test('switches graph granularity and toggles series accessibly', async ({ page }) => {
   await page.goto('./?calculator=home')
+  await page.getByRole('heading', { name: 'Payment trajectory' }).scrollIntoViewIfNeeded()
   const graph = page.locator('.payment-graph')
   await expect(graph.locator('[data-period]')).not.toHaveCount(0)
   const yearlyCount = await graph.locator('[data-period]').count()
@@ -14,6 +15,7 @@ test('switches graph granularity and toggles series accessibly', async ({ page }
 
 test('links focused graph periods with the schedule', async ({ page }) => {
   await page.goto('./?calculator=home')
+  await page.getByRole('heading', { name: 'Payment trajectory' }).scrollIntoViewIfNeeded()
   const period = page.getByRole('button', { name: /2030 payment details/i })
   await period.focus()
   await expect(page.getByRole('tooltip')).toContainText('2030')
@@ -26,6 +28,7 @@ test('links focused graph periods with the schedule', async ({ page }) => {
 
 test('supports visible range and OD comparison controls', async ({ page }) => {
   await page.goto('./?calculator=home')
+  await page.getByRole('heading', { name: 'Payment trajectory' }).scrollIntoViewIfNeeded()
   const first = page.getByLabel('First visible period')
   const last = page.getByLabel('Last visible period')
   await expect(first).toBeVisible()

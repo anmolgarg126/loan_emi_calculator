@@ -70,6 +70,7 @@ test('keeps the initial DOM bounded while exposing schedule data', async ({ page
   const errors = monitorPage(page)
   await page.goto('./')
   expect(await page.locator('*').count()).toBeLessThan(1_000)
+  await page.getByRole('heading', { name: 'Payment trajectory' }).scrollIntoViewIfNeeded()
   const rows = page.locator('.suite-schedule tbody tr')
   await expect(rows).not.toHaveCount(0)
   expect(await rows.count()).toBeLessThanOrEqual(24)

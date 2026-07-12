@@ -1,26 +1,48 @@
-import { lazy, Suspense, useEffect, useReducer, useState } from 'react'
+import { lazy, Suspense, useEffect, useReducer, useRef, useState, type ReactNode } from 'react'
 import { CalculatorShell } from './components/CalculatorShell'
 import { ResultSummary } from './components/ResultSummary'
-import { PaymentGraph } from './components/PaymentGraph'
-import { Schedule } from './components/Schedule'
 import { CarForm } from './components/calculators/CarForm'
 import { EducationForm } from './components/calculators/EducationForm'
 import { GenericForm } from './components/calculators/GenericForm'
 import { HomeForm } from './components/calculators/HomeForm'
 import { PersonalForm } from './components/calculators/PersonalForm'
 import type { CalculatorKind, SolverKind, SuiteScenario } from './domain/calculators'
-import { copyScenarioUrl } from './lib/share'
 import { createInitialSuiteModel, reduceSuiteModel } from './lib/suite-state'
 import { deleteRememberedScenario, readRememberedScenario, saveRememberedScenario } from './lib/remembered-scenario'
+import { copyScenarioUrl, decodeSharedScenario } from './lib/share'
 
 const SolverForm = lazy(() => import('./components/calculators/SolverForm').then((module) => ({ default: module.SolverForm })))
+const AnalysisDetails = lazy(() => import('./components/AnalysisDetails'))
+
+function DeferredAnalysis({ force, children }: { force: boolean; children: ReactNode }) {
+  const [visible, setVisible] = useState(force)
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (force) return
+    if (typeof IntersectionObserver === 'undefined') {
+      const timer = window.setTimeout(() => setVisible(true), 0)
+      return () => window.clearTimeout(timer)
+    }
+    const observer = new IntersectionObserver(([entry]) => {
+      if (entry?.isIntersecting) {
+        setVisible(true)
+        observer.disconnect()
+      }
+    })
+    if (ref.current) observer.observe(ref.current)
+    return () => observer.disconnect()
+  }, [force])
+  return <div ref={ref}>{visible || force ? children : <section className="analysis-placeholder"><h2>Payment trajectory</h2><p>Interactive graph and schedule load as you reach this section.</p></section>}</div>
+}
 
 function App() {
-  const [model, dispatch] = useReducer(reduceSuiteModel, undefined, () => createInitialSuiteModel())
+  const [initialShared] = useState(() => window.location.hash ? decodeSharedScenario(window.location.hash) : null)
+  const [model, dispatch] = useReducer(reduceSuiteModel, undefined, () => createInitialSuiteModel(window.location.href, initialShared ?? undefined))
   const [solver, setSolver] = useState<SolverKind | null>(null)
-  const [status, setStatus] = useState(() => model.shared ? 'Loaded from a shared link.' : window.location.hash ? 'The shared scenario link was invalid and has been ignored.' : '')
+  const [status, setStatus] = useState(() => initialShared ? 'Loaded from a shared link.' : window.location.hash ? 'The shared scenario link was invalid and has been ignored.' : '')
   const [hasRemembered, setHasRemembered] = useState(() => Boolean(readRememberedScenario()))
   const [exporting, setExporting] = useState(false)
+  const [analysisRequested, setAnalysisRequested] = useState(false)
   const current = model.currentResult
   const displayed = current.view.errors.length === 0 || model.lastValidResult.kind !== current.kind
     ? current : model.lastValidResult
@@ -108,6 +130,11 @@ function App() {
     dispatch({ type: 'undo-reset', now: Date.now() })
     setStatus('Reset undone.')
   }
+  const print = async () => {
+    await import('./components/AnalysisDetails')
+    setAnalysisRequested(true)
+    window.setTimeout(() => window.print(), 0)
+  }
 
   const form = (() => {
     switch (model.scenario.kind) {
@@ -119,14 +146,14 @@ function App() {
     }
   })()
 
-  const resultPanel = <ResultSummary current={current} displayed={displayed} shared={model.shared} hasUndo={Boolean(model.undo)} hasRemembered={hasRemembered} exporting={exporting} status={status} onReset={reset} onUndo={undoReset} onRemember={remember} onRestore={restore} onDeleteRemembered={removeRemembered} onShare={share} onPrint={() => window.print()} onCsv={exportCsv} onXlsx={exportXlsx} />
+  const resultPanel = <ResultSummary current={current} displayed={displayed} shared={model.shared} hasUndo={Boolean(model.undo)} hasRemembered={hasRemembered} exporting={exporting} status={status} onReset={reset} onUndo={undoReset} onRemember={remember} onRestore={restore} onDeleteRemembered={removeRemembered} onShare={share} onPrint={print} onCsv={exportCsv} onXlsx={exportXlsx} />
 
   const selectPeriod = (period: string | null) => dispatch({ type: 'set-graph', graph: { selectedPeriod: period } })
-  const schedule = <Schedule schedule={displayed.view.schedule} selectedPeriod={model.graph.selectedPeriod} granularity={model.graph.granularity} onSelectPeriod={(period) => selectPeriod(period)} />
+  const analysis = <DeferredAnalysis force={analysisRequested}><Suspense fallback={<section className="analysis-placeholder"><h2>Payment trajectory</h2><p>Preparing graph and schedule…</p></section>}><AnalysisDetails result={displayed} graph={model.graph} onGraphChange={(graph) => dispatch({ type: 'set-graph', graph })} onSelectPeriod={selectPeriod} /></Suspense></DeferredAnalysis>
 
   return <>
     {solver && <Suspense fallback={<div className="solver-loading" role="status">Opening solver…</div>}><SolverForm kind={solver} onClose={() => setSolver(null)} /></Suspense>}
-    <CalculatorShell activeKind={model.scenario.kind} onSelectKind={selectKind} onSelectSolver={setSolver} form={form} results={resultPanel} graph={<PaymentGraph result={displayed} graphState={model.graph} onGraphStateChange={(graph) => dispatch({ type: 'set-graph', graph })} onSelectPeriod={selectPeriod} />} schedule={schedule} />
+    <CalculatorShell activeKind={model.scenario.kind} onSelectKind={selectKind} onSelectSolver={setSolver} form={form} results={resultPanel} graph={analysis} schedule={null} />
   </>
 }
 
