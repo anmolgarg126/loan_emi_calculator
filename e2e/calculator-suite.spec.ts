@@ -1,10 +1,26 @@
 import { expect, test } from '@playwright/test'
 
-test('shows calculator tabs, solver tools, and private-device status', async ({ page }) => {
+test('starts as a simple calculator and reveals secondary tools on request', async ({ page }) => {
   await page.goto('./?calculator=home')
+
+  await expect(page.locator('.app-intro')).toHaveCount(0)
   await expect(page.getByRole('tab', { name: 'Home' })).toHaveAttribute('aria-selected', 'true')
+  await expect(page.getByRole('heading', { name: 'Home Loan EMI Calculator' })).toBeVisible()
+  await expect(page.getByText('All calculations stay on this device.')).toHaveCount(1)
+
+  const tools = page.locator('details.tools-menu')
+  await expect(tools).not.toHaveAttribute('open', '')
+  await expect(page.getByRole('button', { name: 'Affordability' })).toBeHidden()
+  await tools.locator('summary').click()
   await expect(page.getByRole('button', { name: 'Affordability' })).toBeVisible()
-  await expect(page.getByText('Calculated privately on this device')).toBeVisible()
+
+  const costDetails = page.getByText('Detailed cost breakdown', { exact: true }).locator('..')
+  const exportDetails = page.getByText('Export and share', { exact: true }).locator('..')
+  await expect(costDetails).not.toHaveAttribute('open', '')
+  await expect(exportDetails).not.toHaveAttribute('open', '')
+  await expect(page.getByRole('button', { name: 'Download Excel' })).toBeHidden()
+  await exportDetails.locator('summary').click()
+  await expect(page.getByRole('button', { name: 'Download Excel' })).toBeVisible()
 })
 
 for (const [tab, field] of [
@@ -35,6 +51,7 @@ test('resets and restores the calculator through undo', async ({ page }) => {
 for (const tool of ['Affordability', 'Prepayment', 'Tenure', 'Interest rate'] as const) {
   test(`${tool} solver opens with a live result`, async ({ page }) => {
     await page.goto('./')
+    await page.locator('details.tools-menu summary').click()
     await page.getByRole('button', { name: tool, exact: true }).click()
     await expect(page.getByRole('heading', { name: new RegExp(`${tool} solver`, 'i') })).toBeVisible()
     await expect(page.locator('.solver-answer')).toBeVisible()
@@ -45,6 +62,7 @@ for (const tool of ['Affordability', 'Prepayment', 'Tenure', 'Interest rate'] as
 
 test('solver reports impossible combinations inline', async ({ page }) => {
   await page.goto('./')
+  await page.locator('details.tools-menu summary').click()
   await page.getByRole('button', { name: 'Tenure' }).click()
   await page.getByLabel('Monthly EMI').fill('100')
   await expect(page.locator('.solver-answer')).toContainText('EMI must exceed first-month interest')
@@ -60,6 +78,7 @@ test('replaces zero amounts and formats them after editing', async ({ page }) =>
   await expect(fee).toHaveValue('343')
   await expect(page.locator('#generic-fee-amount')).toHaveText('₹343 · Three hundred forty-three rupees')
 
+  await page.locator('details.tools-menu summary').click()
   await page.getByRole('button', { name: 'Affordability' }).click()
   const emi = page.getByLabel('Monthly EMI')
   await emi.click()

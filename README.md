@@ -6,6 +6,7 @@ Every input and calculation stays in the current browser tab. The app has no bac
 
 ## Features
 
+- Calculator-first layout: essential inputs and four key totals stay visible, while tools, detailed reconciliation, and export actions open only when requested.
 - Generic loan EMI with fees, rate changes, and prepayments.
 - Home loan with ownership costs and optional OD modelling. OD is off by default; the OD premium defaults to zero and the opening parked amount supports amount or percentage entry.
 - Optional OD opening balance, fixed monthly contribution, and arbitrary dated deposits or withdrawals.
@@ -13,7 +14,7 @@ Every input and calculation stays in the current browser tab. The app has no bac
 - Personal loan with reducing/flat quotation modes, deductions, net disbursal, and effective APR.
 - Education loan with dated disbursements, study/moratorium accrual, interest servicing, capitalization, and repayment.
 - Affordability, tenure, interest-rate, and prepayment solvers.
-- Interactive yearly/monthly graph linked to the schedule, with series controls, ranges, OD comparison, keyboard navigation, and touch tooltips.
+- Interactive yearly/monthly graph linked to the schedule, with anchored in-chart tooltips, x/y crosshair guides, series controls, ranges, OD comparison, keyboard navigation, and touch support.
 - Replaceable amount inputs with Indian lakh/crore grouping and compact rupee words; percentage-based amounts show their calculated rupee equivalent.
 - Live cost summaries inside applicable sections, separating monthly cost, one-time cost, planned extra cash flow, and expected proceeds.
 - A reconciled result overview showing loan composition, EMI plus recurring costs, total interest, other charges, total loan payable, and gross/net cost across the selected tenure.
@@ -96,4 +97,4 @@ Change `--private` to `--public` if desired. The workflow uses read-only reposit
 - Financed charges, deductions, balloon payments, and capitalized interest are counted once in the applicable principal or repayment total. Section totals and the overall tenure view use the same derived breakdown.
 - Results are educational estimates. Confirm lender-specific rules, taxes, fees, day-count conventions, and repayment terms before making a financial decision.
 
-See [plan.md](./plan.md), the [approved suite design](./docs/superpowers/specs/2026-07-12-calculator-suite-redesign-design.md), and [AI_CONTEXT.md](./AI_CONTEXT.md).
+See [plan.md](./plan.md), the [calculator-first simplification](./docs/superpowers/specs/2026-07-15-calculator-first-simplification-design.md), the [approved suite design](./docs/superpowers/specs/2026-07-12-calculator-suite-redesign-design.md), and [AI_CONTEXT.md](./AI_CONTEXT.md).

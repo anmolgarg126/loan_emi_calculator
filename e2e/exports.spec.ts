@@ -20,6 +20,7 @@ test('downloads calculator-specific CSV and XLSX and prepares print', async ({ p
   const errors = monitorPage(page)
   for (const kind of ['generic', 'home'] as const) {
     await page.goto(`./?calculator=${kind}`)
+    await page.getByText('Export and share', { exact: true }).click()
     for (const [name, extension] of [['Download CSV', '.csv'], ['Download Excel', '.xlsx']] as const) {
       const downloadPromise = page.waitForEvent('download')
       await page.getByRole('button', { name }).click()

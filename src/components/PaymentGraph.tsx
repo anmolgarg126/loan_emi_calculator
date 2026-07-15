@@ -49,6 +49,23 @@ export function PaymentGraph({ result, graphState, onGraphStateChange, onSelectP
   const hasOd = periods.some((period) => period.odNetUtilized !== undefined)
   const totalPrincipal = periods.reduce((sum, period) => sum + period.principal + period.prepayment, 0)
   const totalInterest = periods.reduce((sum, period) => sum + period.interest, 0)
+  const selectedIndex = selected ? visible.findIndex((period) => period.key === selected.key) : -1
+  const tooltipLines = selected ? [
+    `Payment ${formatCurrency(selected.payment + selected.prepayment + selected.costs)}`,
+    `Principal ${formatCurrency(selected.principal)}`,
+    `Prepayments ${formatCurrency(selected.prepayment)}`,
+    `Interest ${formatCurrency(selected.interest)}`,
+    `Costs ${formatCurrency(selected.costs)}`,
+    `Closing balance ${formatCurrency(selected.balance)}`,
+    ...(graphState.compareOd ? [`OD net utilized ${formatCurrency(selected.odNetUtilized ?? selected.balance)}`] : []),
+  ] : []
+  const tooltipWidth = 238
+  const tooltipHeight = 42 + tooltipLines.length * 18
+  const activeX = selectedIndex >= 0 ? x(selectedIndex) : 0
+  const activeBalanceY = selected ? balanceY(selected.balance) : 0
+  const activeFlowTop = selected ? flowY(series.reduce((sum, item) => sum + (hidden.has(item.key) ? 0 : selected[item.key]), 0)) : 0
+  const tooltipX = Math.min(Math.max(activeX - tooltipWidth / 2, left + 8), width - right - tooltipWidth - 8)
+  const tooltipY = Math.max(top + 8, Math.min(activeFlowTop, activeBalanceY) - tooltipHeight - 12)
 
   const activate = (period: GraphPeriod | null) => onSelectPeriod(period?.key ?? null)
 
@@ -73,7 +90,7 @@ export function PaymentGraph({ result, graphState, onGraphStateChange, onSelectP
           let stacked = 0
           const targetX = x(index)
           const labelEvery = Math.max(1, Math.ceil(visible.length / 12))
-          return <g key={period.key} data-period={period.key} role="button" tabIndex={0} aria-label={`${period.label} payment details. Payment ${formatCurrency(period.payment)}, interest ${formatCurrency(period.interest)}, closing balance ${formatCurrency(period.balance)}.`} aria-describedby={selected?.key === period.key ? tooltipId : undefined} onFocus={() => setActivePeriod(period.key)} onBlur={() => setActivePeriod(null)} onMouseEnter={() => setActivePeriod(period.key)} onMouseLeave={(event) => { if (document.activeElement !== event.currentTarget) setActivePeriod(null) }} onClick={() => activate(period)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); activate(period) } if (event.key === 'Escape') { setActivePeriod(null); activate(null) } }}>
+          return <g key={period.key} data-period={period.key} role="button" tabIndex={0} aria-label={`${period.label} payment details. Payment ${formatCurrency(period.payment)}, interest ${formatCurrency(period.interest)}, closing balance ${formatCurrency(period.balance)}.`} aria-describedby={selected?.key === period.key ? tooltipId : undefined} onFocus={() => setActivePeriod(period.key)} onBlur={() => setActivePeriod(null)} onMouseEnter={() => setActivePeriod(period.key)} onMouseLeave={(event) => { if (document.activeElement !== event.currentTarget) setActivePeriod(null) }} onClick={() => { setActivePeriod(period.key); activate(period) }} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setActivePeriod(period.key); activate(period) } if (event.key === 'Escape') { setActivePeriod(null); activate(null) } }}>
             <rect x={targetX - Math.max(22, slot / 2)} y={top} width={Math.max(44, slot)} height={plotHeight} fill="transparent" />
             {series.map((item) => {
               if (hidden.has(item.key) || period[item.key] <= 0) return null
@@ -88,9 +105,18 @@ export function PaymentGraph({ result, graphState, onGraphStateChange, onSelectP
         })}
         {visible.length > 0 && <path className="balance-line" d={pointPath(visible, x, balanceY, 'balance')} />}
         {graphState.compareOd && visible.length > 0 && <path className="od-balance-line" d={pointPath(visible, x, balanceY, 'odNetUtilized')} />}
+        {selected && selectedIndex >= 0 && <g id={tooltipId} role="tooltip" className="graph-tooltip-svg">
+          <line className="graph-crosshair" x1={activeX} x2={activeX} y1={top} y2={top + plotHeight} />
+          <line className="graph-crosshair" x1={left} x2={width - right} y1={activeBalanceY} y2={activeBalanceY} />
+          <circle className="graph-active-point" cx={activeX} cy={activeBalanceY} r={5} />
+          <g transform={`translate(${tooltipX} ${tooltipY})`}>
+            <rect className="graph-tooltip-box" width={tooltipWidth} height={tooltipHeight} rx={6} />
+            <text className="graph-tooltip-title" x={12} y={22}>{selected.label}</text>
+            {tooltipLines.map((line, index) => <text className="graph-tooltip-line" key={line} x={12} y={44 + index * 18}>{line}</text>)}
+          </g>
+        </g>}
       </svg>
     </div>
-    {selected && <div className="graph-tooltip" id={tooltipId} role="tooltip"><strong>{selected.label}</strong><span>Payment {formatCurrency(selected.payment + selected.prepayment + selected.costs)}</span><span>Principal {formatCurrency(selected.principal)}</span><span>Prepayments {formatCurrency(selected.prepayment)}</span><span>Interest {formatCurrency(selected.interest)}</span><span>Costs {formatCurrency(selected.costs)}</span><span>Closing balance {formatCurrency(selected.balance)}</span>{graphState.compareOd && <span>OD net utilized {formatCurrency(selected.odNetUtilized ?? selected.balance)}</span>}</div>}
     <p className="graph-note">The payment schedule below is the equivalent accessible data view.</p>
   </section>
 }

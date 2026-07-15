@@ -57,74 +57,88 @@ export function ResultSummary({ current, displayed, costs, shared, hasUndo, hasR
   const invalid = current.view.errors.length > 0
   const additionalMetrics = displayed.view.metrics.filter((metric) => !redundantMetricIds[displayed.kind].includes(metric.id))
   return <div className="results-sticky">
-    <div className="result-heading"><div><span>{current.kind === 'home' ? 'Home loan result' : `${current.kind[0]?.toUpperCase()}${current.kind.slice(1)} loan result`}</span><h2>Your repayment view</h2></div><button type="button" className="text-button" onClick={onReset}>Reset calculator</button></div>
-    {shared && <p className="shared-badge">Loaded from a shared link. Editing keeps this tab independent.</p>}
-    {invalid && <div className="validation-summary" role="alert"><strong>Check the highlighted inputs.</strong><p>The figures below remain the last valid estimate.</p><ul>{current.view.errors.slice(0, 4).map((error) => <li key={error}>{error}</li>)}</ul></div>}
-    <div className="primary-result"><span>{displayed.view.primary.label}</span><strong>{formatMetric(displayed.view.primary)}</strong><small>{displayed.kind === 'home' ? 'Standard loan before optional OD comparison' : 'Based on the current scenario'}</small></div>
-    <section className="cost-overview" aria-labelledby="cost-overview-title">
-      <h3 id="cost-overview-title">Cost overview</h3>
-      <div className="cost-highlights">
-        <div><span>Total ongoing monthly cost</span><strong>{formatCurrency(costs.overall.totalMonthlyCost)}</strong><small>EMI plus recurring non-loan costs</small></div>
-        <div><span>Total overall cost for {tenureLabel(costs.overall.tenureMonths)}</span><strong>{formatCurrency(costs.overall.totalOverallCost)}</strong><small>Gross outflow across the selected tenure</small></div>
-      </div>
-      <div className="cost-group">
-        <h4>Monthly view</h4>
-        <dl className="cost-list">
-          <div><dt>EMI</dt><dd>{formatCurrency(costs.overall.emi)}</dd></div>
-          {costs.overall.recurringCost > 0 && <div><dt>Recurring non-loan cost</dt><dd>{formatCurrency(costs.overall.recurringCost)}</dd></div>}
-          {costs.overall.plannedMonthlyCashFlow > 0 && <div><dt>Planned extra cash flow / month</dt><dd>{formatCurrency(costs.overall.plannedMonthlyCashFlow)}</dd></div>}
-        </dl>
-      </div>
-      <div className="cost-group">
-        <h4>Loan composition</h4>
-        <dl className="cost-list">
-          {costs.composition.map((item) => <div key={item.label}><dt>{item.label}</dt><dd>{formatCurrency(item.value)}</dd></div>)}
-        </dl>
-      </div>
-      <div className="cost-group">
-        <h4>Total payable</h4>
-        <dl className="cost-list">
-          <div><dt>Total loan amount</dt><dd>{formatCurrency(costs.overall.loanAmount)}</dd></div>
-          <div><dt>Total interest</dt><dd>{formatCurrency(costs.overall.interest)}</dd></div>
-          <div><dt>Total other charges</dt><dd>{formatCurrency(costs.overall.otherCharges)}</dd></div>
-          <div className="cost-total"><dt>Total loan payable</dt><dd>{formatCurrency(costs.overall.totalLoanPayable)}</dd></div>
-          {costs.overall.upfrontContribution > 0 && <div><dt>Upfront contribution</dt><dd>{formatCurrency(costs.overall.upfrontContribution)}</dd></div>}
-          {costs.overall.proceeds > 0 && <><div><dt>Expected proceeds</dt><dd>− {formatCurrency(costs.overall.proceeds)}</dd></div><div className="cost-total"><dt>Net overall cost</dt><dd>{formatCurrency(costs.overall.netOverallCost)}</dd></div></>}
-          {costs.comparison && <div><dt>{costs.comparison.label}</dt><dd>{formatCurrency(costs.comparison.value)}</dd></div>}
-        </dl>
-      </div>
-      {Object.entries(costs.sections).some(([, summary]) => hasSectionValue(summary)) && <div className="cost-group">
-        <h4>Section totals</h4>
-        <dl className="cost-list section-reconciliation">
-          {Object.entries(costs.sections).filter(([, summary]) => hasSectionValue(summary)).map(([id, summary]) => <div key={id}>
-            <dt>{sectionLabels[id] ?? id}</dt>
-            <dd>
-              {summary.monthlyCost > 0 && <span>{formatCurrency(summary.monthlyCost)}/mo cost</span>}
-              {summary.oneTimeCost > 0 && <span>{formatCurrency(summary.oneTimeCost)} once</span>}
-              {summary.totalCost > 0 && <span>{formatCurrency(summary.totalCost)} total cost</span>}
-              {summary.monthlyCashFlow > 0 && <span>{formatCurrency(summary.monthlyCashFlow)}/mo planned</span>}
-              {summary.oneTimeCashFlow !== 0 && <span>{formatCurrency(summary.oneTimeCashFlow)} planned once</span>}
-              {summary.proceeds > 0 && <span>{formatCurrency(summary.proceeds)} proceeds</span>}
-            </dd>
-          </div>)}
-        </dl>
-      </div>}
-    </section>
-    <dl className="metric-list">{additionalMetrics.map((metric) => <div key={metric.id}><dt>{metric.label}</dt><dd>{formatMetric(metric)}</dd></div>)}</dl>
-    <div className="result-actions">
-      <div className="action-group" role="group" aria-label="Share and save">
-        <button type="button" className="primary-button" onClick={onShare} disabled={invalid}>Copy share link</button>
-        <button type="button" className="secondary-button" onClick={onRemember} disabled={invalid}>Remember this scenario</button>
-        <button type="button" className="secondary-button" onClick={onRestore} disabled={!hasRemembered}>Restore saved scenario</button>
-        <button type="button" className="secondary-button danger-button" onClick={onDeleteRemembered} disabled={!hasRemembered}>Delete saved scenario</button>
-        {hasUndo && <button type="button" className="secondary-button" onClick={onUndo}>Undo reset</button>}
-      </div>
-      <div className="action-group" role="group" aria-label="Print and export">
-        <button type="button" className="secondary-button" onClick={onPrint} disabled={invalid}>Print / Save PDF</button>
-        <button type="button" className="secondary-button" onClick={onCsv} disabled={invalid || exporting}>Download CSV</button>
-        <button type="button" className="secondary-button" onClick={onXlsx} disabled={invalid || exporting}>{exporting ? 'Preparing Excel…' : 'Download Excel'}</button>
+    <div className="result-heading">
+      <h2>Loan summary</h2>
+      <div className="result-heading-actions">
+        {hasUndo && <button type="button" className="text-button" onClick={onUndo}>Undo reset</button>}
+        <button type="button" className="text-button danger-button" onClick={onReset}>Reset calculator</button>
       </div>
     </div>
+    {shared && <p className="shared-badge">Loaded from a shared link. Editing keeps this tab independent.</p>}
+    {invalid && <div className="validation-summary" role="alert"><strong>Check the highlighted inputs.</strong><p>The figures below remain the last valid estimate.</p><ul>{current.view.errors.slice(0, 4).map((error) => <li key={error}>{error}</li>)}</ul></div>}
+    <div className="primary-result"><span>{displayed.view.primary.label}</span><strong>{formatMetric(displayed.view.primary)}</strong>{displayed.kind === 'home' && <small>Standard loan before optional OD comparison</small>}</div>
+    <dl className="key-totals" aria-label="Loan totals">
+      <div><dt>Loan amount</dt><dd>{formatCurrency(costs.overall.loanAmount)}</dd></div>
+      <div><dt>Total interest</dt><dd>{formatCurrency(costs.overall.interest)}</dd></div>
+      <div><dt>Other charges</dt><dd>{formatCurrency(costs.overall.otherCharges)}</dd></div>
+      <div className="key-total"><dt>Total payable over selected tenure</dt><dd>{formatCurrency(costs.overall.totalOverallCost)}</dd></div>
+    </dl>
+    <details className="result-disclosure cost-details">
+      <summary>Detailed cost breakdown</summary>
+      <section className="cost-overview" aria-label="Detailed cost breakdown">
+        <div className="cost-group">
+          <h3>Monthly payment</h3>
+          <dl className="cost-list">
+            <div><dt>EMI</dt><dd>{formatCurrency(costs.overall.emi)}</dd></div>
+            {costs.overall.recurringCost > 0 && <div><dt>Recurring non-loan cost</dt><dd>{formatCurrency(costs.overall.recurringCost)}</dd></div>}
+            <div className="cost-total"><dt>Total ongoing monthly cost</dt><dd>{formatCurrency(costs.overall.totalMonthlyCost)}</dd></div>
+            {costs.overall.plannedMonthlyCashFlow > 0 && <div><dt>Planned extra cash flow / month</dt><dd>{formatCurrency(costs.overall.plannedMonthlyCashFlow)}</dd></div>}
+          </dl>
+        </div>
+        <div className="cost-group">
+          <h3>Loan composition</h3>
+          <dl className="cost-list">
+            {costs.composition.map((item) => <div key={item.label}><dt>{item.label}</dt><dd>{formatCurrency(item.value)}</dd></div>)}
+          </dl>
+        </div>
+        <div className="cost-group">
+          <h3>Total payable</h3>
+          <dl className="cost-list">
+            <div><dt>Total loan amount</dt><dd>{formatCurrency(costs.overall.loanAmount)}</dd></div>
+            <div><dt>Total interest</dt><dd>{formatCurrency(costs.overall.interest)}</dd></div>
+            <div><dt>Total other charges</dt><dd>{formatCurrency(costs.overall.otherCharges)}</dd></div>
+            <div><dt>Total loan payable</dt><dd>{formatCurrency(costs.overall.totalLoanPayable)}</dd></div>
+            {costs.overall.upfrontContribution > 0 && <div><dt>Upfront contribution</dt><dd>{formatCurrency(costs.overall.upfrontContribution)}</dd></div>}
+            <div className="cost-total"><dt>Total overall cost for {tenureLabel(costs.overall.tenureMonths)}</dt><dd>{formatCurrency(costs.overall.totalOverallCost)}</dd></div>
+            {costs.overall.proceeds > 0 && <><div><dt>Expected proceeds</dt><dd>− {formatCurrency(costs.overall.proceeds)}</dd></div><div className="cost-total"><dt>Net overall cost</dt><dd>{formatCurrency(costs.overall.netOverallCost)}</dd></div></>}
+            {costs.comparison && <div><dt>{costs.comparison.label}</dt><dd>{formatCurrency(costs.comparison.value)}</dd></div>}
+          </dl>
+        </div>
+        {Object.entries(costs.sections).some(([, summary]) => hasSectionValue(summary)) && <div className="cost-group">
+          <h3>Section totals</h3>
+          <dl className="cost-list section-reconciliation">
+            {Object.entries(costs.sections).filter(([, summary]) => hasSectionValue(summary)).map(([id, summary]) => <div key={id}>
+              <dt>{sectionLabels[id] ?? id}</dt>
+              <dd>
+                {summary.monthlyCost > 0 && <span>{formatCurrency(summary.monthlyCost)}/mo cost</span>}
+                {summary.oneTimeCost > 0 && <span>{formatCurrency(summary.oneTimeCost)} once</span>}
+                {summary.totalCost > 0 && <span>{formatCurrency(summary.totalCost)} total cost</span>}
+                {summary.monthlyCashFlow > 0 && <span>{formatCurrency(summary.monthlyCashFlow)}/mo planned</span>}
+                {summary.oneTimeCashFlow !== 0 && <span>{formatCurrency(summary.oneTimeCashFlow)} planned once</span>}
+                {summary.proceeds > 0 && <span>{formatCurrency(summary.proceeds)} proceeds</span>}
+              </dd>
+            </div>)}
+          </dl>
+        </div>}
+        {additionalMetrics.length > 0 && <dl className="metric-list">{additionalMetrics.map((metric) => <div key={metric.id}><dt>{metric.label}</dt><dd>{formatMetric(metric)}</dd></div>)}</dl>}
+      </section>
+    </details>
+    <details className="result-disclosure export-details">
+      <summary>Export and share</summary>
+      <div className="result-actions">
+        <div className="action-group" role="group" aria-label="Share and save">
+          <button type="button" className="primary-button" onClick={onShare} disabled={invalid}>Copy share link</button>
+          <button type="button" className="secondary-button" onClick={onRemember} disabled={invalid}>Remember this scenario</button>
+          <button type="button" className="secondary-button" onClick={onRestore} disabled={!hasRemembered}>Restore saved scenario</button>
+          <button type="button" className="secondary-button danger-button" onClick={onDeleteRemembered} disabled={!hasRemembered}>Delete saved scenario</button>
+        </div>
+        <div className="action-group" role="group" aria-label="Print and export">
+          <button type="button" className="secondary-button" onClick={onPrint} disabled={invalid}>Print / Save PDF</button>
+          <button type="button" className="secondary-button" onClick={onCsv} disabled={invalid || exporting}>Download CSV</button>
+          <button type="button" className="secondary-button" onClick={onXlsx} disabled={invalid || exporting}>{exporting ? 'Preparing Excel…' : 'Download Excel'}</button>
+        </div>
+      </div>
+    </details>
     {status && <p className="status-message" aria-live="polite">{status}</p>}
   </div>
 }

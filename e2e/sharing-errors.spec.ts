@@ -18,6 +18,7 @@ test('round-trips a generated v2 fragment in a new browser context', async ({ pa
   })
   await page.goto('./?calculator=car')
   await page.getByLabel('Vehicle price').fill('7654321')
+  await page.getByText('Export and share', { exact: true }).click()
   await page.getByRole('button', { name: 'Copy share link' }).click()
   const url = await page.locator('html').getAttribute('data-shared-url')
   expect(url).toContain('?calculator=car')
@@ -36,6 +37,7 @@ test('recovers from malformed state and disables data actions for invalid input'
   await expect(page.getByText(/shared scenario link was invalid/i)).toBeVisible()
   await page.getByLabel('Loan principal').fill('0')
   await expect(page.getByLabel('Loan principal')).toHaveAttribute('aria-invalid', 'true')
+  await page.getByText('Export and share', { exact: true }).click()
   for (const name of ['Copy share link', 'Print / Save PDF', 'Download CSV', 'Download Excel', 'Remember this scenario']) {
     await expect(page.getByRole('button', { name })).toBeDisabled()
   }

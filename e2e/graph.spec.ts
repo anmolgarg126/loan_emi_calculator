@@ -26,6 +26,35 @@ test('links focused graph periods with the schedule', async ({ page }) => {
   await expect(page.getByRole('tooltip')).toHaveCount(0)
 })
 
+test('shows period details inside the graph with x and y guides', async ({ page }) => {
+  await page.goto('./?calculator=home')
+  await page.getByRole('heading', { name: 'Payment trajectory' }).scrollIntoViewIfNeeded()
+  const graph = page.locator('.payment-graph')
+  const period = page.getByRole('button', { name: /2030 payment details/i })
+
+  await period.hover()
+  const tooltip = graph.locator('svg [role="tooltip"]')
+  await expect(tooltip).toBeVisible()
+  await expect(tooltip).toContainText('2030')
+  await expect(tooltip).toContainText('Closing balance')
+  await expect(graph.locator('.graph-crosshair')).toHaveCount(2)
+  await expect(graph.locator('.graph-active-point')).toHaveCount(1)
+  await expect(graph.locator(':scope > .graph-tooltip')).toHaveCount(0)
+  const tooltipOpacity = await tooltip.evaluate((element) => ({
+    background: Number.parseFloat(getComputedStyle(element.querySelector('.graph-tooltip-box')!).fillOpacity),
+    title: Number.parseFloat(getComputedStyle(element.querySelector('.graph-tooltip-title')!).opacity),
+    values: Number.parseFloat(getComputedStyle(element.querySelector('.graph-tooltip-line')!).opacity),
+  }))
+  expect(tooltipOpacity.background).toBeGreaterThanOrEqual(.88)
+  expect(tooltipOpacity.background).toBeLessThanOrEqual(.92)
+  expect(tooltipOpacity.title).toBe(1)
+  expect(tooltipOpacity.values).toBe(1)
+
+  await page.mouse.move(0, 0)
+  await expect(tooltip).toHaveCount(0)
+  await expect(graph.locator('.graph-crosshair')).toHaveCount(0)
+})
+
 test('supports visible range and OD comparison controls', async ({ page }) => {
   await page.goto('./?calculator=home')
   await page.getByRole('heading', { name: 'Payment trajectory' }).scrollIntoViewIfNeeded()
